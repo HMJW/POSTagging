@@ -2,14 +2,14 @@
 
 import argparse
 import os
-from parser.cmds import Evaluate, Predict, Train
-from parser.config import Config
+from tagger.cmds import Evaluate, Predict, Train
+from tagger.config import Config
 
 import torch
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Create the Biaffine Parser model.'
+        description='Create the tagger model.'
     )
     subparsers = parser.add_subparsers(title='Commands', dest='mode')
     subcommands = {
@@ -21,9 +21,9 @@ if __name__ == '__main__':
         subparser = subcommand.add_subparser(name, subparsers)
         subparser.add_argument('--conf', '-c', default='config.ini',
                                help='path to config file')
-        subparser.add_argument('--model', '-m', default='exp/codt-char/model.char',
+        subparser.add_argument('--model', '-m', default='exp/debug/model.char',
                                help='path to model file')
-        subparser.add_argument('--vocab', '-v', default='exp/codt-char/vocab.char',
+        subparser.add_argument('--vocab', '-v', default='exp/debug/vocab.char',
                                help='path to vocab file')
         subparser.add_argument('--device', '-d', default='-1',
                                help='ID of GPU to use')

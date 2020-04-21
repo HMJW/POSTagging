@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from .model import Model
-from .parser import BiaffineParser
+from .tagger import Tagger
 
-__all__ = ['BiaffineParser', 'Model']
+__all__ = ['Tagger', 'Model']

@@ -4,14 +4,11 @@ from collections import namedtuple
 
 
 Sentence = namedtuple(typename='Sentence',
-                      field_names=['ID', 'FORM', 'LEMMA', 'CPOS',
-                                   'POS', 'FEATS', 'HEAD', 'DEPREL',
-                                   'PHEAD', 'PDEPREL'],
-                      defaults=[None]*10)
+                      field_names=['word', 'label'],
+                      defaults=[None]*2)
 
 
 class Corpus(object):
-    root = '<ROOT>'
 
     def __init__(self, sentences):
         super(Corpus, self).__init__()
@@ -33,37 +30,15 @@ class Corpus(object):
 
     @property
     def words(self):
-        return [[self.root] + list(sentence.FORM) for sentence in self]
+        return [list(sentence.word) for sentence in self]
 
     @property
-    def tags(self):
-        return [[self.root] + list(sentence.CPOS) for sentence in self]
+    def labels(self):
+        return [list(sentence.label) for sentence in self]
 
-    @property
-    def heads(self):
-        return [[0] + list(map(int, sentence.HEAD)) for sentence in self]
-
-    @property 
-    def pdeprels(self): 
-        return [list(sentence.PDEPREL) for sentence in self]
-
-    @property
-    def rels(self):
-        return [[self.root] + list(sentence.DEPREL) for sentence in self]
-
-    @heads.setter
-    def heads(self, sequences):
-        self.sentences = [sentence._replace(HEAD=sequence)
-                          for sentence, sequence in zip(self, sequences)]
-
-    @rels.setter
-    def rels(self, sequences):
-        self.sentences = [sentence._replace(DEPREL=sequence)
-                          for sentence, sequence in zip(self, sequences)]
-
-    @pdeprels.setter 
-    def pdeprels(self, sequences): 
-        self.sentences = [sentence._replace(PDEPREL=sequence) 
+    @labels.setter
+    def labels(self, sequences):
+        self.sentences = [sentence._replace(label=sequence)
                           for sentence, sequence in zip(self, sequences)]
 
     @classmethod

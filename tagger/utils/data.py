@@ -70,7 +70,7 @@ class TextSampler(Sampler):
         return sum(self.chunks)
 
 
-class TextDataset(Dataset):
+class TextBucketDataset(Dataset):
 
     def __init__(self, items, n_buckets=1):
         super(TextDataset, self).__init__()
@@ -91,12 +91,25 @@ class TextDataset(Dataset):
         return dict(zip(self.centroids, self.clusters))
 
 
+class TextDataset(Dataset):
+
+    def __init__(self, items):
+        super(TextDataset, self).__init__()
+
+        self.items = items
+
+    def __getitem__(self, index):
+        return tuple(item[index] for item in self.items)
+
+    def __len__(self):
+        return len(self.items[0])
+
+
 def batchify(dataset, batch_size, shuffle=False):
-    batch_sampler = TextSampler(buckets=dataset.buckets,
-                                batch_size=batch_size,
-                                shuffle=shuffle)
     loader = DataLoader(dataset=dataset,
-                        batch_sampler=batch_sampler,
+                        batch_size=batch_size,
+                        shuffle=shuffle,
                         collate_fn=collate_fn)
 
     return loader
+

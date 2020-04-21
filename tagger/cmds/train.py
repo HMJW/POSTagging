@@ -2,10 +2,10 @@
 
 import os
 from datetime import datetime, timedelta
-from parser import BiaffineParser, Model
-from parser.metric import Metric
-from parser.utils import Corpus, Embedding, Vocab
-from parser.utils.data import TextDataset, batchify
+from tagger import Tagger, Model
+from tagger.metric import SpanF1Method
+from tagger.utils import Corpus, Embedding, Vocab
+from tagger.utils.data import TextDataset, batchify
 
 import torch
 from torch.optim import Adam
@@ -18,19 +18,15 @@ class Train(object):
         subparser = parser.add_parser(
             name, help='Train a model.'
         )
-        subparser.add_argument('--buckets', default=64, type=int,
-                               help='max num of buckets to use')
-        subparser.add_argument('--punct', action='store_true',
-                               help='whether to include punctuation')
-        subparser.add_argument('--ftrain', default='../data/treebanks/ctb9/train.conll',
+        subparser.add_argument('--ftrain', default='../data/conll03/conll03.train.bmes',
                                help='path to train file')
-        subparser.add_argument('--fdev', default='../data/treebanks/ctb9/dev.conll',
+        subparser.add_argument('--fdev', default='../data/conll03/conll03.dev.bmes',
                                help='path to dev file')
-        subparser.add_argument('--ftest', default='../data/treebanks/ctb9/test.conll',
+        subparser.add_argument('--ftest', default='../data/conll03/conll03.test.bmes',
                                help='path to test file')
-        subparser.add_argument('--fembed', default='../data/embedding/giga.100.txt',
+        subparser.add_argument('--fembed', default='../data/embedding/glove.6B.100d.txt',
                                help='path to pretrained embeddings')
-        subparser.add_argument('--unk', default=None,
+        subparser.add_argument('--unk', default="unk",
                                help='unk token in pretrained embeddings')
 
         return subparser
@@ -49,16 +45,16 @@ class Train(object):
         config.update({
             'n_words': vocab.n_init,
             'n_chars': vocab.n_chars,
-            'n_rels': vocab.n_rels,
+            'n_labels': vocab.n_labels,
             'pad_index': vocab.pad_index,
             'unk_index': vocab.unk_index
         })
         print(vocab)
 
         print("Load the dataset")
-        trainset = TextDataset(vocab.numericalize(train), config.buckets)
-        devset = TextDataset(vocab.numericalize(dev), config.buckets)
-        testset = TextDataset(vocab.numericalize(test), config.buckets)
+        trainset = TextDataset(vocab.numericalize(train))
+        devset = TextDataset(vocab.numericalize(dev))
+        testset = TextDataset(vocab.numericalize(test))
         # set the data loaders
         train_loader = batchify(trainset, config.batch_size, True)
         dev_loader = batchify(devset, config.batch_size)
@@ -71,19 +67,14 @@ class Train(object):
               f"{len(test_loader):3} batches provided")
 
         print("Create the model")
-        parser = BiaffineParser(config, vocab.embed).to(config.device)
-        print(f"{parser}\n")
+        tagger = Tagger(config, vocab.embed).to(config.device)
+        print(f"{tagger}\n")
 
-        model = Model(config, vocab, parser)
+        optimizer = Adam(tagger.parameters(), config.lr)
+        model = Model(config, vocab, tagger, optimizer)
 
         total_time = timedelta()
-        best_e, best_metric = 1, Metric()
-        model.optimizer = Adam(model.parser.parameters(),
-                               config.lr,
-                               (config.mu, config.nu),
-                               config.epsilon)
-        model.scheduler = ExponentialLR(model.optimizer,
-                                        config.decay**(1/config.decay_steps))
+        best_e, best_metric = 1, SpanF1Method(vocab)
 
         for epoch in range(1, config.epochs + 1):
             start = datetime.now()
@@ -91,25 +82,25 @@ class Train(object):
             model.train(train_loader)
 
             print(f"Epoch {epoch} / {config.epochs}:")
-            loss, train_metric = model.evaluate(train_loader, config.punct)
+            loss, train_metric = model.evaluate(train_loader)
             print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
-            loss, dev_metric = model.evaluate(dev_loader, config.punct)
+            loss, dev_metric = model.evaluate(dev_loader)
             print(f"{'dev:':6} Loss: {loss:.4f} {dev_metric}")
-            loss, test_metric = model.evaluate(test_loader, config.punct)
+            loss, test_metric = model.evaluate(test_loader)
             print(f"{'test:':6} Loss: {loss:.4f} {test_metric}")
 
             t = datetime.now() - start
             # save the model if it is the best so far
             if dev_metric > best_metric:
                 best_e, best_metric = epoch, dev_metric
-                model.parser.save(config.model)
+                model.tagger.save(config.model)
                 print(f"{t}s elapsed (saved)\n")
             else:
                 print(f"{t}s elapsed\n")
             total_time += t
             if epoch - best_e >= config.patience:
                 break
-        model.parser = BiaffineParser.load(config.model)
+        model.tagger = Tagger.load(config.model)
         loss, metric = model.evaluate(test_loader, config.punct)
 
         print(f"max score of dev is {best_metric.score:.2%} at epoch {best_e}")

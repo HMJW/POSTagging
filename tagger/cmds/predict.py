@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from parser import BiaffineParser, Model
-from parser.utils import Corpus
-from parser.utils.data import TextDataset, batchify
+from tagger import Tagger, Model
+from tagger.utils import Corpus
+from tagger.utils.data import TextDataset, batchify
 
 import torch
 
@@ -13,21 +13,19 @@ class Predict(object):
         subparser = parser.add_parser(
             name, help='Use a trained model to make predictions.'
         )
-        subparser.add_argument('--batch-size', default=5000, type=int,
+        subparser.add_argument('--batch-size', default=64, type=int,
                                help='batch size')
-        subparser.add_argument('--fdata', default='../data/treebanks/codt/test.conll',
+        subparser.add_argument('--fdata', default='../data/conll03/conll03.test.bmes',
                                help='path to dataset')
-        subparser.add_argument('--fpred', default='pred.conllx',
+        subparser.add_argument('--fpred', default='pred.bmes',
                                help='path to predicted result')
-        subparser.add_argument('--tree', action='store_true',
-                               help='whether to force tree')
         return subparser
 
     def __call__(self, config):
         print("Load the model")
         vocab = torch.load(config.vocab)
-        parser = BiaffineParser.load(config.model)
-        model = Model(config, vocab, parser)
+        tagger = Tagger.load(config.model)
+        model = Model(config, vocab, tagger)
 
         print("Load the dataset")
         corpus = Corpus.load(config.fdata)
@@ -36,7 +34,7 @@ class Predict(object):
         loader = batchify(dataset, config.batch_size)
 
         print("Make predictions on the dataset")
-        corpus.heads, corpus.rels, corpus.pdeprels = model.predict(loader)
+        corpus.labels = model.predict(loader)
 
         print(f"Save the predicted result to {config.fpred}")
         corpus.save(config.fpred)
