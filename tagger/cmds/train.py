@@ -101,7 +101,7 @@ class Train(object):
             if epoch - best_e >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        loss, metric = model.evaluate(test_loader, config.punct)
+        loss, metric = model.evaluate(test_loader)
 
         print(f"max score of dev is {best_metric.score:.2%} at epoch {best_e}")
         print(f"the score of test at epoch {best_e} is {metric.score:.2%}")
