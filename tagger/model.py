@@ -17,15 +17,20 @@ class Model(object):
         self.scheduler = scheduler
         self.criterion = nn.CrossEntropyLoss()
 
+
     def train(self, loader):
         self.tagger.train()
 
-        for words, chars, labels in loader:
+        for words, chars, labels, possible_labels in loader:
             self.optimizer.zero_grad()
 
             mask = words.ne(self.vocab.pad_index)
             s_emit = self.tagger(words, chars)
-            loss = self.tagger.crf(s_emit, labels, mask)
+            logZ = self.tagger.crf.get_logZ(s_emit, mask)
+            s_emit[~possible_labels] -= 100000
+
+            possible_logZ = self.tagger.crf.get_logZ(s_emit, mask)
+            loss = logZ - possible_logZ
 
             loss.backward()
             nn.utils.clip_grad_norm_(self.tagger.parameters(),
@@ -38,13 +43,17 @@ class Model(object):
 
         loss, metric = 0, AccuracyMethod()
 
-        for words, chars, labels in loader:
+        for words, chars, labels, possible_labels in loader:
             mask = words.ne(self.vocab.pad_index)
             lens = mask.sum(dim=1)
             targets = torch.split(labels[mask], lens.tolist())
 
             s_emit = self.tagger(words, chars)
-            loss += self.tagger.crf(s_emit, labels, mask)
+            logZ = self.tagger.crf.get_logZ(s_emit, mask)
+            
+            s_emit[~possible_labels] -= 100000
+            possible_logZ = self.tagger.crf.get_logZ(s_emit, mask)
+            loss = logZ - possible_logZ
             predicts = self.tagger.crf.viterbi(s_emit, mask)
 
             metric(predicts, targets)
@@ -57,10 +66,11 @@ class Model(object):
         self.tagger.eval()
 
         all_labels = []
-        for words, chars in loader:
+        for words, chars, possible_labels in loader:
             mask = words.ne(self.vocab.pad_index)
 
             s_emit = self.tagger(words, chars)
+            s_emit[~possible_labels] -= 100000
             predicts = self.tagger.crf.viterbi(s_emit, mask)
             all_labels.extend(predicts)
 

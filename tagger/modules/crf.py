@@ -41,7 +41,6 @@ class CRF(nn.Module):
         T, B, N = emit.shape
 
         alpha = self.strans + emit[0]  # [B, N]
-
         for i in range(1, T):
             trans_i = self.trans.unsqueeze(0)  # [1, N, N]
             emit_i = emit[i].unsqueeze(1)  # [B, 1, N]

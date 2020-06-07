@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 
 import torch
 
@@ -31,8 +31,10 @@ class Vocab(object):
         s = f"{self.__class__.__name__}: "
         s += f"{self.n_words} n_words, "
         s += f"{self.n_chars} chars, "
-        s += f"{self.n_labels} n_labels"
-
+        s += f"{self.n_labels} n_labels, "
+        s += f"{len(self.possible_dict)} n_possible_dict, "
+        label = [len(y) for _, y in self.possible_dict.items()]
+        s += f"{sum(label)/len(label):.2f} avg labels in dict"
         return s
 
     def word2id(self, sequence):
@@ -81,11 +83,23 @@ class Vocab(object):
     def numericalize(self, corpus, training=True):
         words = [self.word2id(seq) for seq in corpus.words]
         chars = [self.char2id(seq) for seq in corpus.words]
+        possible_labels = []
+        for seq in corpus.words:
+            x = torch.zeros((len(seq), self.n_labels), dtype=torch.bool)
+            for i, word in enumerate(seq):
+                word = word.lower()
+                if word in self.possible_dict:
+                    x[i][self.label2id(self.possible_dict[word])] = 1
+                else:
+                    x[i] = 1
+
+            possible_labels.append(x)
+
         if not training:
-            return words, chars
+            return words, chars, possible_labels
         labels = [self.label2id(seq) for seq in corpus.labels]
 
-        return words, chars, labels
+        return words, chars, labels, possible_labels
 
     @classmethod
     def from_corpus(cls, corpus, min_freq=1):
@@ -96,4 +110,16 @@ class Vocab(object):
         vocab = cls(words, chars, labels)
 
         return vocab
+    
+    def collect(self, corpus, min_freq=1):
+        words = Counter(word.lower() for seq in corpus.words for word in seq)
+        words = set(word for word, freq in words.items() if freq >= min_freq)
+        d = defaultdict(set)
+        for seq in corpus.sentences:
+            for word, label in zip(seq.word, seq.label):
+                if word.lower() in words:
+                    d[word.lower()].add(label)
+        self.possible_dict = dict(d)
+
+
 

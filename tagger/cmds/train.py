@@ -37,7 +37,8 @@ class Train(object):
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
         if config.preprocess or not os.path.exists(config.vocab):
-            vocab = Vocab.from_corpus(corpus=train, min_freq=2)
+            vocab = Vocab.from_corpus(corpus=train, min_freq=1)
+            vocab.collect(corpus=train+dev+test, min_freq=1)
             vocab.read_embeddings(Embedding.load(config.fembed, config.unk))
             torch.save(vocab, config.vocab)
         else:
@@ -56,14 +57,14 @@ class Train(object):
         devset = TextDataset(vocab.numericalize(dev))
         testset = TextDataset(vocab.numericalize(test))
         # set the data loaders
-        train_loader = batchify(trainset, config.batch_size, True)
+        train_loader = batchify(trainset, config.batch_size, False)
         dev_loader = batchify(devset, config.batch_size)
         test_loader = batchify(testset, config.batch_size)
-        print(f"{'train:':6} {len(trainset):5} sentences in total, "
+        print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
-        print(f"{'dev:':6} {len(devset):5} sentences in total, "
+        print(f"{'dev:':6} {len(devset):5} sentences, {dev.nwords} words in total, "
               f"{len(dev_loader):3} batches provided")
-        print(f"{'test:':6} {len(testset):5} sentences in total, "
+        print(f"{'test:':6} {len(testset):5} sentences, {test.nwords} words in total, "
               f"{len(test_loader):3} batches provided")
 
         print("Create the model")

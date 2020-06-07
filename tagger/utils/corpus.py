@@ -18,6 +18,10 @@ class Corpus(object):
     def __len__(self):
         return len(self.sentences)
 
+    @property
+    def nwords(self):
+        return sum(len(s.word) for s in self)
+
     def __repr__(self):
         return '\n'.join(
             '\n'.join('\t'.join(map(str, i))
@@ -58,3 +62,7 @@ class Corpus(object):
     def save(self, fname):
         with open(fname, 'w') as f:
             f.write(f"{self}\n")
+
+    def __add__(self, other):
+        sentences = self.sentences + other.sentences
+        return Corpus(sentences)

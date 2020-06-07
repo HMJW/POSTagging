@@ -15,7 +15,7 @@ class Predict(object):
         )
         subparser.add_argument('--batch-size', default=64, type=int,
                                help='batch size')
-        subparser.add_argument('--fdata', default='../data/conll03/conll03.test.bmes',
+        subparser.add_argument('--fdata', default='data/PTB/test.txt',
                                help='path to dataset')
         subparser.add_argument('--fpred', default='pred.bmes',
                                help='path to predicted result')
