@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from tagger.metric import SpanF1Method
+from tagger.metric import AccuracyMethod
 import torch
 import torch.nn as nn
 
@@ -36,7 +36,7 @@ class Model(object):
     def evaluate(self, loader):
         self.tagger.eval()
 
-        loss, metric = 0, SpanF1Method(self.vocab)
+        loss, metric = 0, AccuracyMethod()
 
         for words, chars, labels in loader:
             mask = words.ne(self.vocab.pad_index)
