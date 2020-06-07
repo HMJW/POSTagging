@@ -18,11 +18,11 @@ class Train(object):
         subparser = parser.add_parser(
             name, help='Train a model.'
         )
-        subparser.add_argument('--ftrain', default='data/PTB/train.txt',
+        subparser.add_argument('--ftrain', default='data/PTB/train.tsv',
                                help='path to train file')
-        subparser.add_argument('--fdev', default='data/PTB/dev.txt',
+        subparser.add_argument('--fdev', default='data/PTB/dev.tsv',
                                help='path to dev file')
-        subparser.add_argument('--ftest', default='data/PTB/test.txt',
+        subparser.add_argument('--ftest', default='data/PTB/test.tsv',
                                help='path to test file')
         subparser.add_argument('--fembed', default='../data/embedding/glove.6B.100d.txt',
                                help='path to pretrained embeddings')
