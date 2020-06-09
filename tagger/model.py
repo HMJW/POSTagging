@@ -41,25 +41,19 @@ class Model(object):
     def evaluate(self, loader):
         self.tagger.eval()
 
-        loss, metric = 0, AccuracyMethod()
+        metric = AccuracyMethod()
 
         for words, chars, labels, possible_labels in loader:
             mask = words.ne(self.vocab.pad_index)
             lens = mask.sum(dim=1)
             targets = torch.split(labels[mask], lens.tolist())
 
-            s_emit = self.tagger(words, chars)
-            logZ = self.tagger.crf.get_logZ(s_emit, mask)
-            
-            s_emit[~possible_labels] -= 100000
-            possible_logZ = self.tagger.crf.get_logZ(s_emit, mask)
-            loss += (logZ - possible_logZ) * words.size(0)
-            predicts = self.tagger.crf.viterbi(s_emit, mask)
-
+            s_emit = self.tagger(words)
+            s_emit[~possible_labels] = 0
+            predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)
-        loss /= len(loader)
 
-        return float(loss), metric
+        return metric
 
     @torch.no_grad()
     def predict(self, loader):

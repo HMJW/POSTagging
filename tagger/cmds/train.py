@@ -40,7 +40,6 @@ class Train(object):
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
             vocab.collect(corpus=train, min_freq=1)
-            vocab.read_embeddings(Embedding.load(config.fembed, config.unk))
             torch.save(vocab, config.vocab)
         else:
             vocab = torch.load(config.vocab)
@@ -55,26 +54,24 @@ class Train(object):
 
         print("Load the dataset")
         trainset = TextDataset(vocab.numericalize(train))
-        devset = TextDataset(vocab.numericalize(dev))
         testset = TextDataset(vocab.numericalize(test))
         # set the data loaders
         train_loader = batchify(trainset, config.batch_size, True)
-        dev_loader = batchify(devset, config.batch_size)
-        test_loader = batchify(testset, config.batch_size)
+        test_loader = batchify(testset, config.batch_size)  
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
-        print(f"{'dev:':6} {len(devset):5} sentences, {dev.nwords} words in total, "
-              f"{len(dev_loader):3} batches provided")
         print(f"{'test:':6} {len(testset):5} sentences, {test.nwords} words in total, "
               f"{len(test_loader):3} batches provided")
 
         print("Create the model")
-        tagger = Tagger(config, vocab.embed).to(config.device)
+        tagger = Tagger(config).to(config.device)
         print(f"{tagger}\n")
 
         optimizer = Adam(tagger.parameters(), config.lr)
         model = Model(config, vocab, tagger, optimizer)
-
+        test_metric = model.evaluate(test_loader)
+        print(f"{'test:':6} {test_metric}")
+        exit()
         total_time = timedelta()
         best_e, best_metric = 1, SpanF1Method(vocab)
         last_loss, count = 0, 0
@@ -87,10 +84,6 @@ class Train(object):
             print(f"Epoch {epoch} / {config.epochs}:")
             loss, train_metric = model.evaluate(train_loader)
             print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
-            # loss, dev_metric = model.evaluate(dev_loader)
-            # print(f"{'dev:':6} Loss: {loss:.4f} {dev_metric}")
-            # loss, test_metric = model.evaluate(test_loader)
-            # print(f"{'test:':6} Loss: {loss:.4f} {test_metric}")
 
             t = datetime.now() - start
             # save the model if it is the best so far
