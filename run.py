@@ -21,9 +21,9 @@ if __name__ == '__main__':
         subparser = subcommand.add_subparser(name, subparsers)
         subparser.add_argument('--conf', '-c', default='config.ini',
                                help='path to config file')
-        subparser.add_argument('--model', '-m', default='exp/debug_dict/model.char',
+        subparser.add_argument('--model', '-m', default='exp/fullptb_eval_loss_and_acc/model.char',
                                help='path to model file')
-        subparser.add_argument('--vocab', '-v', default='exp/debug_dict/vocab.char',
+        subparser.add_argument('--vocab', '-v', default='exp/fullptb_eval_loss_and_acc/vocab.char',
                                help='path to vocab file')
         subparser.add_argument('--device', '-d', default='-1',
                                help='ID of GPU to use')

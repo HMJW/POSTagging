@@ -53,13 +53,13 @@ class Model(object):
             
             s_emit[~possible_labels] -= 100000
             possible_logZ = self.tagger.crf.get_logZ(s_emit, mask)
-            loss = logZ - possible_logZ
+            loss += (logZ - possible_logZ) * words.size(0)
             predicts = self.tagger.crf.viterbi(s_emit, mask)
 
             metric(predicts, targets)
         loss /= len(loader)
 
-        return loss, metric
+        return float(loss), metric
 
     @torch.no_grad()
     def predict(self, loader):

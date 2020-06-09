@@ -36,9 +36,10 @@ class Train(object):
         train = Corpus.load(config.ftrain)
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
+        train = dev + test + train
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
-            vocab.collect(corpus=train+dev+test, min_freq=1)
+            vocab.collect(corpus=train, min_freq=1)
             vocab.read_embeddings(Embedding.load(config.fembed, config.unk))
             torch.save(vocab, config.vocab)
         else:
@@ -76,6 +77,7 @@ class Train(object):
 
         total_time = timedelta()
         best_e, best_metric = 1, SpanF1Method(vocab)
+        last_loss, count = 0, 0
 
         for epoch in range(1, config.epochs + 1):
             start = datetime.now()
@@ -85,21 +87,26 @@ class Train(object):
             print(f"Epoch {epoch} / {config.epochs}:")
             loss, train_metric = model.evaluate(train_loader)
             print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
-            loss, dev_metric = model.evaluate(dev_loader)
-            print(f"{'dev:':6} Loss: {loss:.4f} {dev_metric}")
-            loss, test_metric = model.evaluate(test_loader)
-            print(f"{'test:':6} Loss: {loss:.4f} {test_metric}")
+            # loss, dev_metric = model.evaluate(dev_loader)
+            # print(f"{'dev:':6} Loss: {loss:.4f} {dev_metric}")
+            # loss, test_metric = model.evaluate(test_loader)
+            # print(f"{'test:':6} Loss: {loss:.4f} {test_metric}")
 
             t = datetime.now() - start
             # save the model if it is the best so far
-            if dev_metric > best_metric:
-                best_e, best_metric = epoch, dev_metric
+            if epoch > 1 and abs(last_loss - loss) < 1.0:
+                count += 1
+            else:
+                count = 0
+            last_loss = loss
+            if train_metric > best_metric:
+                best_e, best_metric = epoch, train_metric
                 model.tagger.save(config.model)
                 print(f"{t}s elapsed (saved)\n")
             else:
                 print(f"{t}s elapsed\n")
             total_time += t
-            if epoch - best_e >= config.patience:
+            if epoch - best_e >= config.patience or count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
         loss, metric = model.evaluate(test_loader)
