@@ -15,7 +15,6 @@ class Model(object):
         self.tagger = tagger
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.criterion = nn.CrossEntropyLoss()
 
 
     def train(self, loader):
@@ -25,35 +24,36 @@ class Model(object):
             self.optimizer.zero_grad()
 
             mask = words.ne(self.vocab.pad_index)
-            s_emit = self.tagger(words, chars)
-            logZ = self.tagger.crf.get_logZ(s_emit, mask)
-            s_emit[~possible_labels] -= 100000
-
-            possible_logZ = self.tagger.crf.get_logZ(s_emit, mask)
-            loss = logZ - possible_logZ
-
+            s_emit = self.tagger(words)
+            margial = self.tagger.get_logZ(s_emit, mask)
+            loss = -margial
             loss.backward()
             nn.utils.clip_grad_norm_(self.tagger.parameters(),
                                      self.config.clip)
             self.optimizer.step()
+            
 
     @torch.no_grad()
     def evaluate(self, loader):
         self.tagger.eval()
 
-        metric = AccuracyMethod()
-
+        loss, metric = 0, AccuracyMethod()
+        
         for words, chars, labels, possible_labels in loader:
             mask = words.ne(self.vocab.pad_index)
             lens = mask.sum(dim=1)
             targets = torch.split(labels[mask], lens.tolist())
 
             s_emit = self.tagger(words)
-            s_emit[~possible_labels] = 0
+            margial = self.tagger.get_logZ(s_emit, mask)
+            loss = -margial * words.size(0)
+
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)
 
-        return metric
+        loss /= len(loader)
+
+        return float(loss), metric
 
     @torch.no_grad()
     def predict(self, loader):
@@ -62,9 +62,11 @@ class Model(object):
         all_labels = []
         for words, chars, possible_labels in loader:
             mask = words.ne(self.vocab.pad_index)
+            lens = mask.sum(dim=1)
+            targets = torch.split(labels[mask], lens.tolist())
 
-            s_emit = self.tagger(words, chars)
-            s_emit[~possible_labels] -= 100000
+            s_emit = self.tagger(words)
+            s_emit[~possible_labels] = 0
             predicts = self.tagger.crf.viterbi(s_emit, mask)
             all_labels.extend(predicts)
 

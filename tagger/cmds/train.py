@@ -53,25 +53,22 @@ class Train(object):
         print(vocab)
 
         print("Load the dataset")
+        # train.sentences = train.sentences[:1]
         trainset = TextDataset(vocab.numericalize(train))
-        testset = TextDataset(vocab.numericalize(test))
+
         # set the data loaders
         train_loader = batchify(trainset, config.batch_size, True)
-        test_loader = batchify(testset, config.batch_size)  
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
-        print(f"{'test:':6} {len(testset):5} sentences, {test.nwords} words in total, "
-              f"{len(test_loader):3} batches provided")
 
         print("Create the model")
-        tagger = Tagger(config).to(config.device)
+        tagger = Tagger(config)
+        tagger.reset_parameters(vocab)
+        tagger = tagger.to(config.device)
         print(f"{tagger}\n")
-
         optimizer = Adam(tagger.parameters(), config.lr)
         model = Model(config, vocab, tagger, optimizer)
-        test_metric = model.evaluate(test_loader)
-        print(f"{'test:':6} {test_metric}")
-        exit()
+
         total_time = timedelta()
         best_e, best_metric = 1, SpanF1Method(vocab)
         last_loss, count = 0, 0
@@ -99,10 +96,10 @@ class Train(object):
             else:
                 print(f"{t}s elapsed\n")
             total_time += t
-            if epoch - best_e >= config.patience or count >= config.patience:
+            if epoch - best_e >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        loss, metric = model.evaluate(test_loader)
+        loss, metric = model.evaluate(train_loader)
 
         print(f"max score of dev is {best_metric.score:.2%} at epoch {best_e}")
         print(f"the score of test at epoch {best_e} is {metric.score:.2%}")
