@@ -53,11 +53,11 @@ class Train(object):
         print(vocab)
 
         print("Load the dataset")
-        train.sentences = train.sentences[:]
+        train.sentences = train.sentences[:100]
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
-        train_loader = batchify(trainset, config.batch_size, True)
+        train_loader = batchify(trainset, config.batch_size, False)
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
 
@@ -71,6 +71,9 @@ class Train(object):
         total_time = timedelta()
         best_e, best_metric = 1, SpanF1Method(vocab)
         last_loss, count = 0, 0
+
+        loss, train_metric = model.evaluate(train_loader)
+        print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
 
         for epoch in range(1, config.epochs + 1):
             start = datetime.now()

@@ -33,10 +33,15 @@ class Tagger(nn.Module):
         strans = torch.ones(self.config.n_labels)
         etrans = torch.ones(self.config.n_labels)
 
-        for word, plabels in vocab.possible_dict.items():
-            iplabels = set(vocab.labels) - set(plabels)
-            index = vocab.label2id(iplabels)
-            emits[index, vocab.word_dict[word]] = -10000
+        # nn.init.uniform_(trans, a=1, b=5)
+        # nn.init.uniform_(emits, a=1, b=5)
+        # nn.init.uniform_(strans, a=1, b=5)
+        # nn.init.uniform_(etrans, a=1, b=5)
+
+        # for word, plabels in vocab.possible_dict.items():
+        #     iplabels = set(vocab.labels) - set(plabels)
+        #     index = vocab.label2id(iplabels)
+        #     emits[index, vocab.word_dict[word]] = -10000
 
         strans = strans.softmax(dim=-1)
         etrans = etrans.softmax(dim=-1)

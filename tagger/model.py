@@ -16,7 +16,7 @@ class Model(object):
         self.optimizer = optimizer
         self.scheduler = scheduler
 
-
+    @torch.no_grad()
     def train(self, loader):
         self.tagger.train()
 
@@ -76,16 +76,23 @@ class Model(object):
             etrans_numerator = torch.logsumexp(torch.stack(etrans_numerator), 0)
             etrans_denominator = torch.logsumexp(torch.stack(etrans_denominator,-1).squeeze(), -1)
 
-            self.tagger.strans.weight = torch.exp(strans_numerator - strans_denominator)
-            self.tagger.etrans.weight = torch.exp(etrans_numerator - etrans_denominator)
-
-            emits_numerator = torch.logsumexp(torch.stack(emits_numerator, 0), 0)
-            emits_denominator = torch.logsumexp(torch.stack(emits_denominator), 0)
-            self.tagger.emits.weight = torch.exp(emits_numerator - emits_denominator.unsqueeze(-1))
+            self.tagger.strans.data = torch.exp(strans_numerator - strans_denominator)
+            self.tagger.etrans.data = torch.exp(etrans_numerator - etrans_denominator)
+            
+            if len(emits_denominator) > 0:
+                emits_numerator = torch.logsumexp(torch.stack(emits_numerator, 0), 0)
+                emits_denominator = torch.logsumexp(torch.stack(emits_denominator), 0)
+                self.tagger.emits.data = torch.exp(emits_numerator - emits_denominator.unsqueeze(-1))
 
             trans_numerator = torch.logsumexp(torch.stack(trans_numerator, 0), 0)
             trans_denominator = torch.logsumexp(torch.stack(trans_denominator), 0)
-            self.tagger.trans.weight = torch.exp(trans_numerator - trans_denominator)
+            self.tagger.trans.data = torch.exp(trans_numerator - trans_denominator)
+
+            print(self.tagger.strans.sum())
+            print(self.tagger.etrans.sum())
+            print(self.tagger.trans.sum(-1))
+            print(self.tagger.emits.sum(-1))
+
 
 
     @torch.no_grad()
