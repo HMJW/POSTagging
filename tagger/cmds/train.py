@@ -36,7 +36,7 @@ class Train(object):
         train = Corpus.load(config.ftrain)
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
-        train = dev + test + train
+        train = train + dev + test
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
             vocab.collect(corpus=train, min_freq=1)
@@ -57,7 +57,7 @@ class Train(object):
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
-        train_loader = batchify(trainset, config.batch_size, False)
+        train_loader = batchify(trainset, config.batch_size, True)
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
 

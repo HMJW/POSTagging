@@ -41,9 +41,10 @@ class Model(object):
 
             for i, length in enumerate(lens):
                 forward, backward = alpha[i, :length], beta[i, -length:]
-                logZ = torch.logsumexp(forward[-1], dim=-1)
+                logZ = torch.logsumexp(forward[-1] + torch.log(self.tagger.etrans), dim=-1)
+                logZ2 = torch.logsumexp(backward[0] + torch.log(self.tagger.strans) + torch.log(s_emit[i, 0]), dim=-1)
                 gamma = forward + backward
-
+                
                 # update strans
                 strans_numerator.append(gamma[0])
                 strans_denominator.append(logZ)
@@ -53,22 +54,20 @@ class Model(object):
                 etrans_denominator.append(logZ)
 
                 # update emit
-                logp_emit = torch.logsumexp(((forward + backward) - logZ), dim=0)
-                emits_denominator.append(logp_emit)
-                count = mask.new_zeros(self.tagger.emits.shape, dtype=torch.float)
-                count = count + (torch.arange(self.tagger.n_words).unsqueeze(-1).to(words.device) == words[i,:length]).sum(-1)
-                count = count * logp_emit.unsqueeze(-1)
+                logp_emit = (forward + backward) - logZ
+                emits_denominator.append(torch.logsumexp(logp_emit, dim = 0))
+                count = torch.arange(self.tagger.n_words).unsqueeze(-1).to(words.device) == words[i,:length]
+                count = torch.log(count.float() @ torch.exp(logp_emit))
+                count = count.transpose(0, 1)
                 emits_numerator.append(count)
-
+                
                 # update trans
                 if length > 1:
                     marginal = [forward[l].unsqueeze(-1) + backward[l+1].unsqueeze(0) + torch.log(self.tagger.trans) + torch.log(self.tagger.emits[:, words[i, l+1]]) for l in range(length-1)]
                     marginal = torch.stack(marginal, 0)
-                    marginal = torch.logsumexp(marginal, dim=0)
+                    marginal = torch.logsumexp(marginal, dim=0) - logZ
                     trans_numerator.append(marginal)
-
                     logp_emit_t = torch.logsumexp(((forward + backward) - logZ)[:-1], dim=0)
-                    trans_denominator.append(logp_emit_t)
 
             strans_numerator = torch.logsumexp(torch.stack(strans_numerator), 0)
             strans_denominator = torch.logsumexp(torch.stack(strans_denominator,-1).squeeze(), -1)
@@ -79,20 +78,19 @@ class Model(object):
             self.tagger.strans.data = torch.exp(strans_numerator - strans_denominator)
             self.tagger.etrans.data = torch.exp(etrans_numerator - etrans_denominator)
             
-            if len(emits_denominator) > 0:
-                emits_numerator = torch.logsumexp(torch.stack(emits_numerator, 0), 0)
-                emits_denominator = torch.logsumexp(torch.stack(emits_denominator), 0)
-                self.tagger.emits.data = torch.exp(emits_numerator - emits_denominator.unsqueeze(-1))
+            emits_numerator = torch.logsumexp(torch.stack(emits_numerator, 0), 0)
+            emits_denominator = torch.logsumexp(torch.stack(emits_denominator), 0)
+            self.tagger.emits.data = torch.exp(emits_numerator - emits_denominator.unsqueeze(-1))
 
-            trans_numerator = torch.logsumexp(torch.stack(trans_numerator, 0), 0)
-            trans_denominator = torch.logsumexp(torch.stack(trans_denominator), 0)
-            self.tagger.trans.data = torch.exp(trans_numerator - trans_denominator)
-
-            print(self.tagger.strans.sum())
-            print(self.tagger.etrans.sum())
-            print(self.tagger.trans.sum(-1))
-            print(self.tagger.emits.sum(-1))
-
+            if len(trans_denominator) > 0:
+                trans_numerator = torch.logsumexp(torch.stack(trans_numerator, 0), 0)
+                trans_denominator = torch.logsumexp(torch.stack(trans_denominator), 0)
+                self.tagger.trans.data = torch.exp(trans_numerator - trans_denominator)
+            print(self.tagger.strans)
+            print(self.tagger.etrans)
+            print(self.tagger.emits[:, 4])
+            print(self.tagger.trans)
+            exit()
 
 
     @torch.no_grad()
@@ -108,7 +106,7 @@ class Model(object):
 
             s_emit = self.tagger(words)
             margial = self.tagger.get_logZ(s_emit, mask)
-            loss = -margial * words.size(0)
+            loss += -margial * words.size(0)
 
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)

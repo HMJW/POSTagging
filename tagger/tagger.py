@@ -41,7 +41,7 @@ class Tagger(nn.Module):
         # for word, plabels in vocab.possible_dict.items():
         #     iplabels = set(vocab.labels) - set(plabels)
         #     index = vocab.label2id(iplabels)
-        #     emits[index, vocab.word_dict[word]] = -10000
+        #     emits[index, vocab.word_dict[word]] = -1
 
         strans = strans.softmax(dim=-1)
         etrans = etrans.softmax(dim=-1)
@@ -75,8 +75,6 @@ class Tagger(nn.Module):
             scores = torch.logsumexp(scores, dim=1)  # [B, N]
             alpha[i][mask_i] = scores[mask_i]
 
-        for i, length in enumerate(lens):
-            alpha[length-1, i] += torch.log(self.etrans)
 
         return alpha.transpose(0, 1)
 
@@ -92,17 +90,15 @@ class Tagger(nn.Module):
         T, B, N = emit.shape    
         beta = emit.new_zeros(T, B, N)
 
-        beta[-1] = torch.log(self.etrans) + torch.log(emit[-1])  # [B, N]
+        beta[-1] = torch.log(self.etrans)  # [B, N]
         for i in range(1, T):
             trans_i = torch.log(self.trans.unsqueeze(0))  # [1, N, N]
-            emit_i = torch.log(emit[-i-1].unsqueeze(1))  # [B, 1, N]
+            emit_i = torch.log(emit[-i])  # [B, N]
             mask_i = mask[-i-1].unsqueeze(1).expand_as(beta[-i])  # [B, N]
-            scores = trans_i + emit_i + beta[-i].unsqueeze(2)  # [B, N, N]
-            scores = torch.logsumexp(scores, dim=1)  # [B, N]
+            scores = trans_i + (emit_i + beta[-i]).unsqueeze(1)  # [B, N, N]
+            scores = torch.logsumexp(scores, dim=2)  # [B, N]
             beta[-i-1][mask_i] = scores[mask_i]
 
-        for i, length in enumerate(lens):
-            beta[-length, i] += torch.log(self.etrans)
 
         return beta.transpose(0, 1)
 
