@@ -51,7 +51,7 @@ class Model(object):
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)
 
-        loss /= len(loader)
+        loss /= len(loader.dataset)
 
         return float(loss), metric
 
