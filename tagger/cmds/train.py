@@ -53,7 +53,7 @@ class Train(object):
         print(vocab)
 
         print("Load the dataset")
-        # train.sentences = train.sentences[:1]
+        train.sentences = train.sentences[:]
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
@@ -66,8 +66,7 @@ class Train(object):
         tagger.reset_parameters(vocab)
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
-        optimizer = Adam(tagger.parameters(), config.lr)
-        model = Model(config, vocab, tagger, optimizer)
+        model = Model(config, vocab, tagger)
 
         total_time = timedelta()
         best_e, best_metric = 1, SpanF1Method(vocab)
