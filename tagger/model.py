@@ -28,7 +28,7 @@ class Model(object):
             margial = self.tagger.get_logZ(s_emit, mask)
             loss = -margial
             loss.backward()
-            nn.utils.clip_grad_norm_(self.tagger.parameters(),
+            nn.utils.clip_grad_value_(self.tagger.parameters(),
                                      self.config.clip)
             self.optimizer.step()
             
@@ -46,7 +46,7 @@ class Model(object):
 
             s_emit = self.tagger(words)
             margial = self.tagger.get_logZ(s_emit, mask)
-            loss = -margial * words.size(0)
+            loss += -margial * words.size(0)
 
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)
