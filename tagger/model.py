@@ -43,6 +43,7 @@ class Model(object):
                 forward, backward = alpha[i, :length], beta[i, -length:]
                 logZ = torch.logsumexp(forward[-1] + torch.log(self.tagger.etrans), dim=-1)
                 logZ2 = torch.logsumexp(backward[0] + torch.log(self.tagger.strans) + torch.log(s_emit[i, 0]), dim=-1)
+                assert torch.isfinite(logZ)
                 gamma = forward + backward
                 
                 # update strans
@@ -71,27 +72,37 @@ class Model(object):
 
             strans_numerator = torch.logsumexp(torch.stack(strans_numerator), 0)
             strans_denominator = torch.logsumexp(torch.stack(strans_denominator,-1).squeeze(), -1)
+            to_keep_strans = ~torch.isfinite(strans_numerator)
+
+            self.tagger.strans.data = self.tagger.strans.data * to_keep_strans + torch.exp(strans_numerator - strans_denominator) + 1e-6
+            self.tagger.strans.data = self.tagger.strans.data / self.tagger.strans.data.sum()
 
             etrans_numerator = torch.logsumexp(torch.stack(etrans_numerator), 0)
             etrans_denominator = torch.logsumexp(torch.stack(etrans_denominator,-1).squeeze(), -1)
-
-            self.tagger.strans.data = torch.exp(strans_numerator - strans_denominator)
-            self.tagger.etrans.data = torch.exp(etrans_numerator - etrans_denominator)
+            to_keep_etrans = ~torch.isfinite(etrans_numerator)
+            self.tagger.etrans.data = self.tagger.etrans.data * to_keep_etrans + torch.exp(etrans_numerator- etrans_denominator) + 1e-6
+            self.tagger.etrans.data = self.tagger.etrans.data / self.tagger.etrans.data.sum()
             
             emits_numerator = torch.logsumexp(torch.stack(emits_numerator, 0), 0)
+            column_to_keep_emits = ~torch.isfinite(emits_numerator)
             emits_denominator = torch.logsumexp(torch.stack(emits_denominator), 0)
-            self.tagger.emits.data = torch.exp(emits_numerator - emits_denominator.unsqueeze(-1))
+            rows_to_keep_emits = ~torch.isfinite(emits_denominator)
+            emits_denominator[rows_to_keep_emits] = 0
+            to_keep_emits = column_to_keep_emits + rows_to_keep_emits.unsqueeze(-1)
+            self.tagger.emits.data = self.tagger.emits.data * to_keep_emits + torch.exp(emits_numerator - emits_denominator.unsqueeze(-1)) + 1e-6
+            self.tagger.emits.data = self.tagger.emits.data / self.tagger.emits.data.sum(-1).unsqueeze(-1)
 
             if len(trans_denominator) > 0:
                 trans_numerator = torch.logsumexp(torch.stack(trans_numerator, 0), 0)
                 trans_denominator = torch.logsumexp(torch.stack(trans_denominator), 0)
-                self.tagger.trans.data = torch.exp(trans_numerator - trans_denominator)
-            print(self.tagger.strans)
-            print(self.tagger.etrans)
-            print(self.tagger.emits[:, 4])
-            print(self.tagger.trans)
-            exit()
 
+                rows_to_keep_trans = ~torch.isfinite(trans_denominator)
+                trans_denominator[rows_to_keep_trans] = 0
+                self.tagger.trans.data = self.tagger.trans.data * rows_to_keep_trans + torch.exp(trans_numerator - trans_denominator) + 1e-6
+                self.tagger.trans.data = self.tagger.trans.data / self.tagger.trans.data.sum(-1).unsqueeze(-1)
+            # print(self.tagger.strans)
+            # print(self.tagger.etrans)
+            # print(self.tagger.trans)
 
     @torch.no_grad()
     def evaluate(self, loader):

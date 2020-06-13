@@ -53,11 +53,11 @@ class Train(object):
         print(vocab)
 
         print("Load the dataset")
-        train.sentences = train.sentences[:100]
+        train.sentences = train.sentences[:]
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
-        train_loader = batchify(trainset, config.batch_size, True)
+        train_loader = batchify(trainset, config.batch_size, False)
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
 
