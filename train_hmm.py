@@ -23,6 +23,6 @@ X = torch.cat(trainset.items[0], dim=-1)
 X = X.view(-1, 1)
 X = X.numpy()
 
-model = hmm.MultinomialHMM(n_components=vocab.n_labels, verbose=True)
+model = hmm.MultinomialHMM(n_components=vocab.n_labels, verbose=True, n_iter=1000)
 
 model.fit(X, lengths)

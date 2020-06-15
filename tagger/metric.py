@@ -144,3 +144,29 @@ class SpanF1Method(Metric):
             chunks.append(tuple(span))
 
         return set(chunks)
+
+
+class ManyToOneAccuracy(Metric):
+
+    def __init__(self, n_clusters=1, eps=1e-5):
+        super(ManyToOneAccuracy, self).__init__()
+
+        self.n_clusters = n_clusters
+        self.eps = eps
+        self.clusters = torch.zeros(self.n_clusters, self.n_clusters)
+
+    def __call__(self, preds, golds):
+        for pred, gold in zip(preds, golds):
+            for p_w, g_w in zip(pred, gold):
+                self.clusters[p_w][g_w] += 1
+
+    def __repr__(self):
+        return f"Many-to-one Accuracy: {self.accuracy:.2%}"
+
+    @property
+    def score(self):
+        return float(self.accuracy)
+
+    @property
+    def accuracy(self):
+        return (self.clusters.max(dim=1)[0]).sum() / (self.clusters.sum() + self.eps)

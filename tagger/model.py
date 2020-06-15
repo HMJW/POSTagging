@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from tagger.metric import AccuracyMethod
+from tagger.metric import AccuracyMethod, ManyToOneAccuracy
 import torch
 import torch.nn as nn
 
@@ -120,7 +120,7 @@ class Model(object):
     def evaluate(self, loader):
         self.tagger.eval()
 
-        loss, metric = 0, AccuracyMethod()
+        loss, metric, manyToOne = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
         
         for words, chars, labels, possible_labels in loader:
             mask = words.ne(self.vocab.pad_index)
@@ -133,10 +133,11 @@ class Model(object):
 
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)
+            manyToOne(predicts, targets)
 
         loss /= len(loader.dataset)
 
-        return float(loss), metric
+        return float(loss), metric, manyToOne
 
     @torch.no_grad()
     def predict(self, loader):

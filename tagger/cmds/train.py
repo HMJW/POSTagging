@@ -72,8 +72,8 @@ class Train(object):
         best_e, best_metric = 1, SpanF1Method(vocab)
         last_loss, count = 0, 0
 
-        loss, train_metric = model.evaluate(train_loader)
-        print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
+        loss, train_metric, manytoOne_metric = model.evaluate(train_loader)
+        print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {train_metric}")
 
         for epoch in range(1, config.epochs + 1):
             start = datetime.now()
@@ -81,29 +81,29 @@ class Train(object):
             model.train(train_loader)
 
             print(f"Epoch {epoch} / {config.epochs}:")
-            loss, train_metric = model.evaluate(train_loader)
-            print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
+            loss, train_metric, manytoOne_metric = model.evaluate(train_loader)
+            print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {train_metric}")
 
             t = datetime.now() - start
             # save the model if it is the best so far
-            if epoch > 1 and abs(last_loss - loss) < 1.0:
+            if epoch > 1 and abs(last_loss - loss) <= 2e-5:
                 count += 1
             else:
                 count = 0
             last_loss = loss
-            if train_metric > best_metric:
+            if manytoOne_metric > best_metric:
                 best_e, best_metric = epoch, train_metric
                 model.tagger.save(config.model)
                 print(f"{t}s elapsed (saved)\n")
             else:
                 print(f"{t}s elapsed\n")
             total_time += t
-            if epoch - best_e >= config.patience:
+            if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
         loss, metric = model.evaluate(train_loader)
 
-        print(f"max score of dev is {best_metric.score:.2%} at epoch {best_e}")
+        print(f"max score of test is {best_metric.score:.2%} at epoch {best_e}")
         print(f"the score of test at epoch {best_e} is {metric.score:.2%}")
         print(f"average time of each epoch is {total_time / epoch}s")
         print(f"{total_time}s elapsed")
