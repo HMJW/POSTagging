@@ -33,20 +33,21 @@ class Tagger(nn.Module):
         strans = torch.ones(self.config.n_labels)
         etrans = torch.ones(self.config.n_labels)
 
-        nn.init.uniform_(trans, a=1, b=5)
-        nn.init.uniform_(emits, a=1, b=5)
-        nn.init.uniform_(strans, a=1, b=5)
-        nn.init.uniform_(etrans, a=1, b=5)
+        nn.init.uniform_(trans, a=0, b=5)
+        nn.init.uniform_(emits, a=0, b=5)
+        nn.init.uniform_(strans, a=0, b=5)
+        nn.init.uniform_(etrans, a=0, b=5)
 
-        # for word, plabels in vocab.possible_dict.items():
-        #     iplabels = set(vocab.labels) - set(plabels)
-        #     index = vocab.label2id(iplabels)
-        #     emits[index, vocab.word_dict[word]] = -10000
+        self.emits.data[:, vocab.pad_index] = -10000
+        for word, plabels in vocab.possible_dict.items():
+            iplabels = set(vocab.labels) - set(plabels)
+            index = vocab.label2id(iplabels)
+            emits[index, vocab.word_dict[word]] = -10000
 
-        strans = strans.softmax(dim=-1)
-        etrans = etrans.softmax(dim=-1)
-        trans = trans.softmax(dim=-1)
-        emits = emits.softmax(dim=-1)
+        strans = torch.log(strans.softmax(dim=-1))
+        etrans = torch.log(etrans.softmax(dim=-1))
+        trans = torch.log(trans.softmax(dim=-1))
+        emits = torch.log(emits.softmax(dim=-1))
 
         self.trans = nn.Parameter(trans)
         self.strans = nn.Parameter(strans)
@@ -66,10 +67,10 @@ class Tagger(nn.Module):
         T, B, N = emit.shape
         alpha = emit.new_zeros(T, B, N)
 
-        alpha[0] = torch.log(self.strans) + torch.log(emit[0])  # [B, N]
+        alpha[0] = self.strans + emit[0]  # [B, N]
         for i in range(1, T):
-            trans_i = torch.log(self.trans.unsqueeze(0))  # [1, N, N]
-            emit_i = torch.log(emit[i].unsqueeze(1))  # [B, 1, N]
+            trans_i = self.trans.unsqueeze(0)  # [1, N, N]
+            emit_i = emit[i].unsqueeze(1)  # [B, 1, N]
             mask_i = mask[i].unsqueeze(1).expand_as(alpha[i-1])  # [B, N]
             scores = trans_i + emit_i + alpha[i-1].unsqueeze(2)  # [B, N, N]
             scores = torch.logsumexp(scores, dim=1)  # [B, N]
@@ -90,10 +91,10 @@ class Tagger(nn.Module):
         T, B, N = emit.shape    
         beta = emit.new_zeros(T, B, N)
 
-        beta[-1] = torch.log(self.etrans)  # [B, N]
+        beta[-1] = self.etrans  # [B, N]
         for i in range(1, T):
-            trans_i = torch.log(self.trans.unsqueeze(0))  # [1, N, N]
-            emit_i = torch.log(emit[-i])  # [B, N]
+            trans_i = self.trans.unsqueeze(0)  # [1, N, N]
+            emit_i = emit[-i]  # [B, N]
             mask_i = mask[-i-1].unsqueeze(1).expand_as(beta[-i])  # [B, N]
             scores = trans_i + (emit_i + beta[-i]).unsqueeze(1)  # [B, N, N]
             scores = torch.logsumexp(scores, dim=2)  # [B, N]
@@ -117,15 +118,15 @@ class Tagger(nn.Module):
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
 
-        alpha = torch.log(strans) + torch.log(emit[0])  # [B, N]
+        alpha = strans + emit[0]  # [B, N]
         for i in range(1, T):
-            trans_i = torch.log(trans.unsqueeze(0))  # [1, N, N]
-            emit_i = torch.log(emit[i].unsqueeze(1))  # [B, 1, N]
+            trans_i = trans.unsqueeze(0)  # [1, N, N]
+            emit_i = emit[i].unsqueeze(1)  # [B, 1, N]
             mask_i = mask[i].unsqueeze(1).expand_as(alpha)  # [B, N]
             scores = trans_i + emit_i + alpha.unsqueeze(2)  # [B, N, N]
             scores = torch.logsumexp(scores, dim=1)  # [B, N]
             alpha[mask_i] = scores[mask_i]
-        logZ = torch.logsumexp(alpha + torch.log(etrans), dim=1).sum()
+        logZ = torch.logsumexp(alpha + etrans, dim=1).sum()
 
         return logZ / B
 
@@ -137,11 +138,11 @@ class Tagger(nn.Module):
         delta = emit.new_zeros(T, B, N)
         paths = emit.new_zeros(T, B, N, dtype=torch.long)
 
-        delta[0] = torch.log(self.strans) + torch.log(emit[0])  # [B, N]
+        delta[0] = self.strans + emit[0]  # [B, N]
         for i in range(1, T):
             trans_i = self.trans.unsqueeze(0)  # [1, N, N]
             emit_i = emit[i].unsqueeze(1)  # [B, 1, N]
-            scores = torch.log(trans_i) + torch.log(emit_i) + delta[i - 1].unsqueeze(2)  # [B, N, N]
+            scores = trans_i + emit_i + delta[i - 1].unsqueeze(2)  # [B, N, N]
             delta[i], paths[i] = torch.max(scores, dim=1)
 
         predicts = []

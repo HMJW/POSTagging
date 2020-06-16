@@ -57,7 +57,7 @@ class Train(object):
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
-        train_loader = batchify(trainset, config.batch_size, True)
+        train_loader = batchify(trainset, config.batch_size, False)
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
 
@@ -92,7 +92,7 @@ class Train(object):
                 count = 0
             last_loss = loss
             if manytoOne_metric > best_metric:
-                best_e, best_metric = epoch, train_metric
+                best_e, best_metric = epoch, manytoOne_metric
                 model.tagger.save(config.model)
                 print(f"{t}s elapsed (saved)\n")
             else:
@@ -101,9 +101,9 @@ class Train(object):
             if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        loss, metric = model.evaluate(train_loader)
+        loss, metric, many2one = model.evaluate(train_loader)
 
         print(f"max score of test is {best_metric.score:.2%} at epoch {best_e}")
-        print(f"the score of test at epoch {best_e} is {metric.score:.2%}")
+        print(f"the score of test at epoch {best_e} is {many2one.score:.2%}")
         print(f"average time of each epoch is {total_time / epoch}s")
         print(f"{total_time}s elapsed")
