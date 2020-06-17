@@ -38,11 +38,11 @@ class Tagger(nn.Module):
         nn.init.uniform_(strans, a=0, b=5)
         nn.init.uniform_(etrans, a=0, b=5)
 
-        emits[:, vocab.pad_index] = -10000
+        emits[:, vocab.pad_index] = float("-inf")
         for word, plabels in vocab.possible_dict.items():
             iplabels = set(vocab.labels) - set(plabels)
             index = vocab.label2id(iplabels)
-            emits[index, vocab.word_dict[word]] = -10000
+            emits[index, vocab.word_dict[word]] = float("-inf")
 
         strans = torch.log(strans.softmax(dim=-1))
         etrans = torch.log(etrans.softmax(dim=-1))
