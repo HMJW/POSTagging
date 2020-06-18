@@ -19,15 +19,13 @@ class Model(object):
 
     def train(self, loader):
         self.tagger.train()
-        loss = 0
-        for words, labels in loader:
-            self.optimizer.zero_grad()
+        self.optimizer.zero_grad()
+        for words, _ in loader:
             mask = words.ne(self.vocab.pad_index)
             s_emit = self.tagger(words)
             likelyhood = self.tagger.get_logZ(s_emit, mask)
-            loss = loss -likelyhood
-
-        loss.backward()
+            loss = -likelyhood
+            loss.backward()
         self.optimizer.step()
             
 
