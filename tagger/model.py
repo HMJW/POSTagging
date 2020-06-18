@@ -34,7 +34,7 @@ class Model(object):
         emits_numerator = [torch.full([self.tagger.n_tags, self.tagger.n_words], float("-inf")).to(device)]
         trans_numerator = [torch.full([self.tagger.n_tags, self.tagger.n_tags], float("-inf")).to(device)]
 
-        for words, chars, labels, possible_labels in loader:
+        for words, labels in loader:
             mask = words.ne(self.vocab.pad_index)
             batch_size, lens = mask.size(0), mask.sum(1)
             max_len= words.size(1)
@@ -106,7 +106,7 @@ class Model(object):
 
         loss, metric, manyToOne = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
         
-        for words, chars, labels, possible_labels in loader:
+        for words, labels in loader:
             mask = words.ne(self.vocab.pad_index)
             lens = mask.sum(dim=1)
             targets = torch.split(labels[mask], lens.tolist())
@@ -128,13 +128,10 @@ class Model(object):
         self.tagger.eval()
 
         all_labels = []
-        for words, chars, possible_labels in loader:
+        for words in loader:
+            words = next(words)
             mask = words.ne(self.vocab.pad_index)
-            lens = mask.sum(dim=1)
-            targets = torch.split(labels[mask], lens.tolist())
-
             s_emit = self.tagger(words)
-            s_emit[~possible_labels] = 0
             predicts = self.tagger.viterbi(s_emit, mask)
             all_labels.extend(predicts)
 

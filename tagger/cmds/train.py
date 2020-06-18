@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timedelta
 from tagger import Tagger, Model
-from tagger.metric import SpanF1Method
+from tagger.metric import ManyToOneAccuracy, AccuracyMethod
 from tagger.utils import Corpus, Embedding, Vocab
 from tagger.utils.data import TextDataset, batchify
 
@@ -24,10 +24,8 @@ class Train(object):
                                help='path to dev file')
         subparser.add_argument('--ftest', default='data/PTB/test.tsv',
                                help='path to test file')
-        subparser.add_argument('--fembed', default='../data/embedding/glove.6B.100d.txt',
-                               help='path to pretrained embeddings')
-        subparser.add_argument('--unk', default="unk",
-                               help='unk token in pretrained embeddings')
+        subparser.add_argument('--use_dict', action="store_true", default=False,
+                        help='path to test file')
 
         return subparser
 
@@ -36,7 +34,7 @@ class Train(object):
         train = Corpus.load(config.ftrain)
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
-        train = train + dev + test
+        train.sentences = train.sentences[:1000]
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
             vocab.collect(corpus=train, min_freq=1)
@@ -53,7 +51,6 @@ class Train(object):
         print(vocab)
 
         print("Load the dataset")
-        train.sentences = train.sentences[:]
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
@@ -63,17 +60,18 @@ class Train(object):
 
         print("Create the model")
         tagger = Tagger(config)
-        tagger.reset_parameters(vocab)
+        if config.use_dict:
+            tagger.reset_parameters(vocab)
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         model = Model(config, vocab, tagger)
 
         total_time = timedelta()
-        best_e, best_metric = 1, SpanF1Method(vocab)
+        best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
         last_loss, count = 0, 0
 
-        loss, train_metric, manytoOne_metric = model.evaluate(train_loader)
-        print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {train_metric}")
+        loss, acc_metric, manytoOne_metric = model.evaluate(train_loader)
+        print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {acc_metric}")
 
         for epoch in range(1, config.epochs + 1):
             start = datetime.now()
@@ -101,7 +99,7 @@ class Train(object):
             if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        loss, metric, many2one = model.evaluate(train_loader)
+        loss, _, many2one = model.evaluate(train_loader)
 
         print(f"max score of test is {best_metric.score:.2%} at epoch {best_e}")
         print(f"the score of test at epoch {best_e} is {many2one.score:.2%}")

@@ -82,24 +82,11 @@ class Vocab(object):
 
     def numericalize(self, corpus, training=True):
         words = [self.word2id(seq) for seq in corpus.words]
-        chars = [self.char2id(seq) for seq in corpus.words]
-        possible_labels = []
-        for seq in corpus.words:
-            x = torch.zeros((len(seq), self.n_labels), dtype=torch.bool)
-            for i, word in enumerate(seq):
-                word = word.lower()
-                if word in self.possible_dict:
-                    x[i][self.label2id(self.possible_dict[word])] = 1
-                else:
-                    x[i] = 1
-
-            possible_labels.append(x)
-
         if not training:
-            return words, chars, possible_labels
+            return (words, )
         labels = [self.label2id(seq) for seq in corpus.labels]
 
-        return words, chars, labels, possible_labels
+        return words, labels
 
     @classmethod
     def from_corpus(cls, corpus, min_freq=1):

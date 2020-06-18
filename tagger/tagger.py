@@ -16,11 +16,26 @@ class Tagger(nn.Module):
         self.config = config
         self.n_tags = config.n_labels
         self.n_words = config.n_words
-        self.trans = nn.Parameter(torch.Tensor(config.n_labels, config.n_labels))
-        self.emits = nn.Parameter(torch.Tensor(config.n_labels, config.n_words))
-        self.strans = nn.Parameter(torch.Tensor(config.n_labels))
-        self.etrans = nn.Parameter(torch.Tensor(config.n_labels))
 
+        trans = torch.ones(self.config.n_labels, self.config.n_labels)
+        emits = torch.ones(self.config.n_labels, self.config.n_words)
+        strans = torch.ones(self.config.n_labels)
+        etrans = torch.ones(self.config.n_labels)
+
+        nn.init.uniform_(trans, a=0, b=5)
+        nn.init.uniform_(emits, a=0, b=5)
+        nn.init.uniform_(strans, a=0, b=5)
+        nn.init.uniform_(etrans, a=0, b=5)
+
+        strans = torch.log(strans.softmax(dim=-1))
+        etrans = torch.log(etrans.softmax(dim=-1))
+        trans = torch.log(trans.softmax(dim=-1))
+        emits = torch.log(emits.softmax(dim=-1))
+
+        self.trans = nn.Parameter(trans)
+        self.strans = nn.Parameter(strans)
+        self.emits = nn.Parameter(emits)
+        self.etrans = nn.Parameter(etrans)
 
     def extra_repr(self):
         info = f"n_tags={self.n_tags}, n_words={self.n_words}"
@@ -108,13 +123,7 @@ class Tagger(nn.Module):
         strans = self.strans
         etrans = self.etrans
         trans = self.trans
-
-        if self.training:
-            strans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-            etrans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-            trans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-            emit.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-
+        
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
 
