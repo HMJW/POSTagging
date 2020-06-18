@@ -19,18 +19,16 @@ class Model(object):
 
     def train(self, loader):
         self.tagger.train()
-
+        loss = 0
         for words, chars, labels, possible_labels in loader:
             self.optimizer.zero_grad()
-
             mask = words.ne(self.vocab.pad_index)
             s_emit = self.tagger(words)
-            margial = self.tagger.get_logZ(s_emit, mask)
-            loss = -margial
-            loss.backward()
-            nn.utils.clip_grad_value_(self.tagger.parameters(),
-                                     self.config.clip)
-            self.optimizer.step()
+            likelyhood = self.tagger.get_logZ(s_emit, mask)
+            loss = loss -likelyhood
+
+        loss.backward()
+        self.optimizer.step()
             
 
     @torch.no_grad()
@@ -45,8 +43,8 @@ class Model(object):
             targets = torch.split(labels[mask], lens.tolist())
 
             s_emit = self.tagger(words)
-            margial = self.tagger.get_logZ(s_emit, mask)
-            loss += -margial * words.size(0)
+            likelyhood = self.tagger.get_logZ(s_emit, mask)
+            loss += -likelyhood
 
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)

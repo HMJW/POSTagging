@@ -8,7 +8,7 @@ from tagger.utils import Corpus, Embedding, Vocab
 from tagger.utils.data import TextDataset, batchify
 
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import ExponentialLR
 
 
@@ -24,11 +24,8 @@ class Train(object):
                                help='path to dev file')
         subparser.add_argument('--ftest', default='data/PTB/test.tsv',
                                help='path to test file')
-        subparser.add_argument('--fembed', default='../data/embedding/glove.6B.100d.txt',
-                               help='path to pretrained embeddings')
-        subparser.add_argument('--unk', default="unk",
-                               help='unk token in pretrained embeddings')
-
+        subparser.add_argument('--use_dict', action="store_true", default=False,
+                               help='if use dict')
         return subparser
 
     def __call__(self, config):
@@ -36,7 +33,7 @@ class Train(object):
         train = Corpus.load(config.ftrain)
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
-        train = dev + test + train
+        train = train + dev + test
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
             vocab.collect(corpus=train, min_freq=1)
@@ -53,20 +50,20 @@ class Train(object):
         print(vocab)
 
         print("Load the dataset")
-        # train.sentences = train.sentences[:1000]
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
-        train_loader = batchify(trainset, config.batch_size, True)
+        train_loader = batchify(trainset, config.batch_size, False)
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
 
         print("Create the model")
         tagger = Tagger(config)
-        tagger.reset_parameters(vocab)
+        if config.use_dict:
+            tagger.reset_parameters(vocab)
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
-        optimizer = Adam(tagger.parameters(), config.lr, weight_decay=0.1)
+        optimizer = Adam(tagger.parameters(), config.lr)
         model = Model(config, vocab, tagger, optimizer)
 
         total_time = timedelta()
@@ -87,7 +84,7 @@ class Train(object):
 
             t = datetime.now() - start
             # save the model if it is the best so far
-            if epoch > 1 and abs(last_loss - loss) < 1.0:
+            if epoch > 1 and abs(last_loss - loss) < 2e-5:
                 count += 1
             else:
                 count = 0
@@ -99,7 +96,7 @@ class Train(object):
             else:
                 print(f"{t}s elapsed\n")
             total_time += t
-            if epoch - best_e >= config.patience:
+            if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
         loss, metric = model.evaluate(train_loader)

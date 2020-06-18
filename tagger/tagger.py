@@ -16,10 +16,16 @@ class Tagger(nn.Module):
         self.config = config
         self.n_tags = config.n_labels
         self.n_words = config.n_words
-        self.trans = nn.Parameter(torch.Tensor(config.n_labels, config.n_labels))
-        self.emits = nn.Parameter(torch.Tensor(config.n_labels, config.n_words))
-        self.strans = nn.Parameter(torch.Tensor(config.n_labels))
-        self.etrans = nn.Parameter(torch.Tensor(config.n_labels))
+
+        trans = torch.ones(self.config.n_labels, self.config.n_labels)
+        emits = torch.ones(self.config.n_labels, self.config.n_words)
+        strans = torch.ones(self.config.n_labels)
+        etrans = torch.ones(self.config.n_labels)
+
+        self.trans = nn.Parameter(trans)
+        self.strans = nn.Parameter(strans)
+        self.emits = nn.Parameter(emits)
+        self.etrans = nn.Parameter(etrans)
 
 
     def extra_repr(self):
@@ -33,15 +39,16 @@ class Tagger(nn.Module):
         strans = torch.ones(self.config.n_labels)
         etrans = torch.ones(self.config.n_labels)
 
-        nn.init.uniform_(trans, a=1, b=5)
-        nn.init.uniform_(emits, a=1, b=5)
-        nn.init.uniform_(strans, a=1, b=5)
-        nn.init.uniform_(etrans, a=1, b=5)
+        nn.init.uniform_(trans, a=0, b=5)
+        nn.init.uniform_(emits, a=0, b=5)
+        nn.init.uniform_(strans, a=0, b=5)
+        nn.init.uniform_(etrans, a=0, b=5)
 
+        emits[:, vocab.pad_index] = float("-inf")
         for word, plabels in vocab.possible_dict.items():
             iplabels = set(vocab.labels) - set(plabels)
             index = vocab.label2id(iplabels)
-            emits[index, vocab.word_dict[word]] = -10000
+            emits[index, vocab.word_dict[word]] = float("-inf")
 
         self.trans = nn.Parameter(trans)
         self.strans = nn.Parameter(strans)
@@ -61,11 +68,11 @@ class Tagger(nn.Module):
         etrans = self.etrans.softmax(dim=-1)
         trans = self.trans.softmax(dim=-1)
 
-        if self.training:
-            strans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-            etrans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-            trans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-            emit.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
+        # if self.training:
+        #     strans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
+        #     etrans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
+        #     trans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
+        #     emit.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
 
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
@@ -80,7 +87,7 @@ class Tagger(nn.Module):
             alpha[mask_i] = scores[mask_i]
         logZ = torch.logsumexp(alpha + torch.log(etrans), dim=1).sum()
 
-        return logZ / B
+        return logZ
 
 
     def viterbi(self, emit, mask):
@@ -103,7 +110,7 @@ class Tagger(nn.Module):
 
         predicts = []
         for i, length in enumerate(lens):
-            prev = torch.argmax(delta[length - 1, i] + etrans)
+            prev = torch.argmax(delta[length - 1, i] + torch.log(etrans))
 
             predict = [prev]
             for j in reversed(range(1, length)):
