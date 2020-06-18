@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timedelta
 from tagger import Tagger, Model
-from tagger.metric import SpanF1Method
+from tagger.metric import AccuracyMethod, ManyToOneAccuracy
 from tagger.utils import Corpus, Embedding, Vocab
 from tagger.utils.data import TextDataset, batchify
 
@@ -55,18 +55,10 @@ class Train(object):
 
         print("Load the dataset")
         trainset = TextDataset(vocab.numericalize(train))
-        devset = TextDataset(vocab.numericalize(dev))
-        testset = TextDataset(vocab.numericalize(test))
         # set the data loaders
         train_loader = batchify(trainset, config.batch_size, True)
-        dev_loader = batchify(devset, config.batch_size)
-        test_loader = batchify(testset, config.batch_size)
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
-        print(f"{'dev:':6} {len(devset):5} sentences, {dev.nwords} words in total, "
-              f"{len(dev_loader):3} batches provided")
-        print(f"{'test:':6} {len(testset):5} sentences, {test.nwords} words in total, "
-              f"{len(test_loader):3} batches provided")
 
         print("Create the model")
         tagger = Tagger(config, vocab.embed).to(config.device)
@@ -76,7 +68,7 @@ class Train(object):
         model = Model(config, vocab, tagger, optimizer)
 
         total_time = timedelta()
-        best_e, best_metric = 1, SpanF1Method(vocab)
+        best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
         last_loss, count = 0, 0
 
         for epoch in range(1, config.epochs + 1):
@@ -85,12 +77,8 @@ class Train(object):
             model.train(train_loader)
 
             print(f"Epoch {epoch} / {config.epochs}:")
-            loss, train_metric = model.evaluate(train_loader)
-            print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
-            # loss, dev_metric = model.evaluate(dev_loader)
-            # print(f"{'dev:':6} Loss: {loss:.4f} {dev_metric}")
-            # loss, test_metric = model.evaluate(test_loader)
-            # print(f"{'test:':6} Loss: {loss:.4f} {test_metric}")
+            loss, acc_train_metric, many2one_train_metric = model.evaluate(train_loader)
+            print(f"{'train:':6} Loss: {loss:.4f} {many2one_train_metric} {acc_train_metric}")
 
             t = datetime.now() - start
             # save the model if it is the best so far
@@ -99,8 +87,8 @@ class Train(object):
             else:
                 count = 0
             last_loss = loss
-            if train_metric > best_metric:
-                best_e, best_metric = epoch, train_metric
+            if many2one_train_metric > best_metric:
+                best_e, best_metric = epoch, many2one_train_metric
                 model.tagger.save(config.model)
                 print(f"{t}s elapsed (saved)\n")
             else:
@@ -109,9 +97,9 @@ class Train(object):
             if epoch - best_e >= config.patience or count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        loss, metric = model.evaluate(test_loader)
+        _, metric, many2one_metric = model.evaluate(train_loader)
 
         print(f"max score of dev is {best_metric.score:.2%} at epoch {best_e}")
-        print(f"the score of test at epoch {best_e} is {metric.score:.2%}")
+        print(f"the score of test at epoch {best_e} is {many2one_metric.score:.2%}")
         print(f"average time of each epoch is {total_time / epoch}s")
         print(f"{total_time}s elapsed")
