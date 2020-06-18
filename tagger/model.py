@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from tagger.metric import AccuracyMethod
+from tagger.metric import AccuracyMethod, ManyToOneAccuracy
 import torch
 import torch.nn as nn
 
@@ -20,7 +20,7 @@ class Model(object):
     def train(self, loader):
         self.tagger.train()
         loss = 0
-        for words, chars, labels, possible_labels in loader:
+        for words, labels in loader:
             self.optimizer.zero_grad()
             mask = words.ne(self.vocab.pad_index)
             s_emit = self.tagger(words)
@@ -35,9 +35,9 @@ class Model(object):
     def evaluate(self, loader):
         self.tagger.eval()
 
-        loss, metric = 0, AccuracyMethod()
+        loss, metric, many2one_metric = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
         
-        for words, chars, labels, possible_labels in loader:
+        for words, labels in loader:
             mask = words.ne(self.vocab.pad_index)
             lens = mask.sum(dim=1)
             targets = torch.split(labels[mask], lens.tolist())
@@ -48,23 +48,20 @@ class Model(object):
 
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)
+            many2one_metric(predicts, targets)
 
         loss /= len(loader.dataset)
 
-        return float(loss), metric
+        return float(loss), metric, many2one_metric
 
     @torch.no_grad()
     def predict(self, loader):
         self.tagger.eval()
 
         all_labels = []
-        for words, chars, possible_labels in loader:
+        for words in loader:
             mask = words.ne(self.vocab.pad_index)
-            lens = mask.sum(dim=1)
-            targets = torch.split(labels[mask], lens.tolist())
-
             s_emit = self.tagger(words)
-            s_emit[~possible_labels] = 0
             predicts = self.tagger.crf.viterbi(s_emit, mask)
             all_labels.extend(predicts)
 

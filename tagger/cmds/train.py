@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timedelta
 from tagger import Tagger, Model
-from tagger.metric import SpanF1Method
+from tagger.metric import ManyToOneAccuracy, AccuracyMethod
 from tagger.utils import Corpus, Embedding, Vocab
 from tagger.utils.data import TextDataset, batchify
 
@@ -33,7 +33,8 @@ class Train(object):
         train = Corpus.load(config.ftrain)
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
-        train = train + dev + test
+        train.sentences = train.sentences[:1000]
+        # train = train + dev + test
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
             vocab.collect(corpus=train, min_freq=1)
@@ -67,11 +68,11 @@ class Train(object):
         model = Model(config, vocab, tagger, optimizer)
 
         total_time = timedelta()
-        best_e, best_metric = 1, SpanF1Method(vocab)
+        best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
         last_loss, count = 0, 0
 
-        loss, train_metric = model.evaluate(train_loader)
-        print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
+        loss, acc_metric, many2one_metric = model.evaluate(train_loader)
+        print(f"{'train:':6} Loss: {loss:.4f} {many2one_metric} {acc_metric}")
 
         for epoch in range(1, config.epochs + 1):
             start = datetime.now()
@@ -79,8 +80,8 @@ class Train(object):
             model.train(train_loader)
 
             print(f"Epoch {epoch} / {config.epochs}:")
-            loss, train_metric = model.evaluate(train_loader)
-            print(f"{'train:':6} Loss: {loss:.4f} {train_metric}")
+            loss, acc_train_metric, many2one_train_metric = model.evaluate(train_loader)
+            print(f"{'train:':6} Loss: {loss:.4f} {many2one_train_metric} {acc_train_metric}")
 
             t = datetime.now() - start
             # save the model if it is the best so far
@@ -89,8 +90,8 @@ class Train(object):
             else:
                 count = 0
             last_loss = loss
-            if train_metric > best_metric:
-                best_e, best_metric = epoch, train_metric
+            if many2one_train_metric > best_metric:
+                best_e, best_metric = epoch, many2one_train_metric
                 model.tagger.save(config.model)
                 print(f"{t}s elapsed (saved)\n")
             else:
