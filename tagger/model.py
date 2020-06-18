@@ -27,7 +27,8 @@ class Model(object):
             loss = -likelyhood
             loss.backward()
         self.optimizer.step()
-            
+        if self.scheduler is not None:
+            self.scheduler.step()
 
     @torch.no_grad()
     def evaluate(self, loader):

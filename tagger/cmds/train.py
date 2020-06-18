@@ -9,7 +9,7 @@ from tagger.utils.data import TextDataset, batchify
 
 import torch
 from torch.optim import Adam, SGD
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import MultiplicativeLR
 
 
 class Train(object):
@@ -65,7 +65,8 @@ class Train(object):
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         optimizer = Adam(tagger.parameters(), config.lr)
-        model = Model(config, vocab, tagger, optimizer)
+        scheduler = MultiplicativeLR(optimizer, lr_lambda=lambda e: 0.95)
+        model = Model(config, vocab, tagger, optimizer, scheduler)
 
         total_time = timedelta()
         best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
