@@ -60,9 +60,10 @@ class Model(object):
 
         all_labels = []
         for words in loader:
+            words = next(words)
             mask = words.ne(self.vocab.pad_index)
             s_emit = self.tagger(words)
-            predicts = self.tagger.crf.viterbi(s_emit, mask)
+            predicts = self.tagger.viterbi(s_emit, mask)
             all_labels.extend(predicts)
 
         all_labels = [self.vocab.id2label(seq.tolist()) for seq in all_labels]

@@ -32,5 +32,5 @@ class Evaluate(object):
         loader = batchify(dataset, config.batch_size)
 
         print("Evaluate the dataset")
-        loss, metric = model.evaluate(loader,)
-        print(f"Loss: {loss:.4f} {metric}")
+        loss, acc_metric, manytoOne_metric = model.evaluate(loader,)
+        print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {acc_metric}")

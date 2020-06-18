@@ -22,6 +22,11 @@ class Tagger(nn.Module):
         strans = torch.ones(self.config.n_labels)
         etrans = torch.ones(self.config.n_labels)
 
+        nn.init.uniform_(trans, a=0, b=5)
+        nn.init.uniform_(emits, a=0, b=5)
+        nn.init.uniform_(strans, a=0, b=5)
+        nn.init.uniform_(etrans, a=0, b=5)
+
         self.trans = nn.Parameter(trans)
         self.strans = nn.Parameter(strans)
         self.emits = nn.Parameter(emits)
@@ -67,12 +72,6 @@ class Tagger(nn.Module):
         strans = self.strans.softmax(dim=-1)
         etrans = self.etrans.softmax(dim=-1)
         trans = self.trans.softmax(dim=-1)
-
-        # if self.training:
-        #     strans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-        #     etrans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-        #     trans.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
-        #     emit.register_hook(lambda x: x.masked_fill_(torch.isnan(x), 0))
 
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape

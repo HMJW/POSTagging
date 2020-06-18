@@ -83,7 +83,7 @@ class Vocab(object):
     def numericalize(self, corpus, training=True):
         words = [self.word2id(seq) for seq in corpus.words]
         if not training:
-            return words
+            return (words, )
         labels = [self.label2id(seq) for seq in corpus.labels]
 
         return words, labels

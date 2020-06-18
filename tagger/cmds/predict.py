@@ -15,7 +15,7 @@ class Predict(object):
         )
         subparser.add_argument('--batch-size', default=64, type=int,
                                help='batch size')
-        subparser.add_argument('--fdata', default='data/PTB/test.tsv',
+        subparser.add_argument('--fdata', default='data/PTB/debug.tsv',
                                help='path to dataset')
         subparser.add_argument('--fpred', default='pred.tsv',
                                help='path to predicted result')
