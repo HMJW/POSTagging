@@ -73,6 +73,12 @@ class Tagger(nn.Module):
         etrans = self.etrans.softmax(dim=-1)
         trans = self.trans.softmax(dim=-1)
 
+        if self.training:
+            strans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+            etrans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+            trans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+            emit.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
 

@@ -9,7 +9,7 @@ from tagger.utils.data import TextDataset, batchify
 
 import torch
 from torch.optim import Adam, SGD
-from torch.optim.lr_scheduler import MultiplicativeLR
+from torch.optim.lr_scheduler import ExponentialLR
 
 
 class Train(object):
@@ -65,7 +65,7 @@ class Train(object):
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         optimizer = Adam(tagger.parameters(), config.lr)
-        scheduler = MultiplicativeLR(optimizer, lr_lambda=lambda e: 0.95)
+        scheduler = ExponentialLR(optimizer, gamma=0.95)
         model = Model(config, vocab, tagger, optimizer, scheduler)
 
         total_time = timedelta()
@@ -101,9 +101,9 @@ class Train(object):
             if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        loss, metric = model.evaluate(train_loader)
+        loss, acc_metric, many2one_metric = model.evaluate(train_loader)
 
         print(f"max score of dev is {best_metric.score:.2%} at epoch {best_e}")
-        print(f"the score of test at epoch {best_e} is {metric.score:.2%}")
+        print(f"the score of test at epoch {best_e} is {many2one_metric.score:.2%}")
         print(f"average time of each epoch is {total_time / epoch}s")
         print(f"{total_time}s elapsed")
