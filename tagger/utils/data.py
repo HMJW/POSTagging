@@ -33,9 +33,15 @@ def kmeans(x, k):
 
     return centroids, clusters
 
+def pad_matrix(seq_matrix, padding_value):
+    lens = [matrix.size(1) for matrix in seq_matrix]
+    max_len = max(lens)
+    padded = [torch.cat([m, torch.full([m.size(0), max_len-l], padding_value, dtype=m.dtype)], dim=-1) for l, m in zip(lens, seq_matrix)]
+    return pad_sequence(padded, batch_first=True, padding_value=padding_value)
+
 
 def collate_fn(data):
-    reprs = (pad_sequence(i, True) for i in zip(*data))
+    reprs = (pad_matrix(i, 0) if i[0].ndimension() > 1 else pad_sequence(i, True, 0) for i in zip(*data))
     if torch.cuda.is_available():
         reprs = (i.cuda() for i in reprs)
 

@@ -18,7 +18,7 @@ class Train(object):
         subparser = parser.add_parser(
             name, help='Train a model.'
         )
-        subparser.add_argument('--ftrain', default='data/PTB/train.tsv',
+        subparser.add_argument('--ftrain', default='data/PTB/debug.tsv',
                                help='path to train file')
         subparser.add_argument('--fdev', default='data/PTB/dev.tsv',
                                help='path to dev file')
@@ -34,9 +34,10 @@ class Train(object):
         train = Corpus.load(config.ftrain)
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
-        train.sentences = train.sentences[:1000]
+        train.sentences = train.sentences[:]
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
+            vocab.create_feature_space(train)
             vocab.collect(corpus=train, min_freq=1)
             torch.save(vocab, config.vocab)
         else:
@@ -46,10 +47,11 @@ class Train(object):
             'n_chars': vocab.n_chars,
             'n_labels': vocab.n_labels,
             'pad_index': vocab.pad_index,
-            'unk_index': vocab.unk_index
+            'unk_index': vocab.unk_index,
+            'n_features': len(vocab.templates),
+            'n_trigrams': len(vocab.tri_grams)
         })
         print(vocab)
-
         print("Load the dataset")
         trainset = TextDataset(vocab.numericalize(train))
 
@@ -60,8 +62,6 @@ class Train(object):
 
         print("Create the model")
         tagger = Tagger(config)
-        if config.use_dict:
-            tagger.reset_parameters(vocab)
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         model = Model(config, vocab, tagger)

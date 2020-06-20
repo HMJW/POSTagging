@@ -18,23 +18,23 @@ class Tagger(nn.Module):
         self.n_words = config.n_words
 
         trans = torch.ones(self.config.n_labels, self.config.n_labels)
-        emits = torch.ones(self.config.n_labels, self.config.n_words)
+        weights = torch.zeros(self.config.n_features, self.config.n_labels)
+        trigram_weights = torch.zeros(self.config.n_trigrams)
         strans = torch.ones(self.config.n_labels)
         etrans = torch.ones(self.config.n_labels)
 
         nn.init.uniform_(trans, a=0, b=5)
-        nn.init.uniform_(emits, a=0, b=5)
         nn.init.uniform_(strans, a=0, b=5)
         nn.init.uniform_(etrans, a=0, b=5)
 
         strans = torch.log(strans.softmax(dim=-1))
         etrans = torch.log(etrans.softmax(dim=-1))
         trans = torch.log(trans.softmax(dim=-1))
-        emits = torch.log(emits.softmax(dim=-1))
 
         self.trans = nn.Parameter(trans)
         self.strans = nn.Parameter(strans)
-        self.emits = nn.Parameter(emits)
+        self.weights = nn.Parameter(weights)
+        self.trigram_weights = nn.Parameter(trigram_weights)
         self.etrans = nn.Parameter(etrans)
 
     def extra_repr(self):
@@ -43,38 +43,20 @@ class Tagger(nn.Module):
         return info
 
     def reset_parameters(self, vocab):
-        trans = torch.ones(self.config.n_labels, self.config.n_labels)
-        emits = torch.ones(self.config.n_labels, self.config.n_words)
-        strans = torch.ones(self.config.n_labels)
-        etrans = torch.ones(self.config.n_labels)
+        pass
 
-        nn.init.uniform_(trans, a=0, b=5)
-        nn.init.uniform_(emits, a=0, b=5)
-        nn.init.uniform_(strans, a=0, b=5)
-        nn.init.uniform_(etrans, a=0, b=5)
-
-        emits[:, vocab.pad_index] = float("-inf")
-        for word, plabels in vocab.possible_dict.items():
-            iplabels = set(vocab.labels) - set(plabels)
-            index = vocab.label2id(iplabels)
-            emits[index, vocab.word_dict[word]] = float("-inf")
-
-        strans = torch.log(strans.softmax(dim=-1))
-        etrans = torch.log(etrans.softmax(dim=-1))
-        trans = torch.log(trans.softmax(dim=-1))
-        emits = torch.log(emits.softmax(dim=-1))
-
-        self.trans = nn.Parameter(trans)
-        self.strans = nn.Parameter(strans)
-        self.emits = nn.Parameter(emits)
-        self.etrans = nn.Parameter(etrans)
-
-    def forward(self, words):
+    def forward(self, templates, trigrams):
         # get the mask and lengths of given batch
-        batch_size = words.size(0)
-        x = self.emits.unsqueeze(0).repeat(batch_size,1,1).gather(-1, words.unsqueeze(1).repeat(1,self.n_tags,1))
+        batch_size, max_len = templates.size(0), templates.size(1)
 
-        return x.transpose(1, 2)
+        # feature score
+        x = self.weights.unsqueeze(0).unsqueeze(0).repeat(batch_size, max_len, 1, 1).gather(2, templates.unsqueeze(-1).repeat(1, 1, 1, self.n_tags))
+        x = x.sum(2)
+
+        # trigram score
+        y = self.trigram_weights.unsqueeze(0).unsqueeze(0).repeat(batch_size, max_len, 1).gather(2, trigrams)
+        y = y.sum(-1).unsqueeze(-1)
+        return x + y
     
     def forw(self, emit, mask):
         lens = mask.sum(dim=1)
