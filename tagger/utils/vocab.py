@@ -42,7 +42,7 @@ class Vocab(object):
         return s
 
     def word2id(self, sequence):
-        return torch.tensor([self.word_dict.get(word.lower(), self.unk_index)
+        return torch.tensor([self.word_dict.get(word, self.unk_index)
                              for word in sequence])
 
     def char2id(self, sequence, max_length=20):
@@ -85,21 +85,12 @@ class Vocab(object):
         self.n_chars = len(self.chars)
 
     def numericalize(self, corpus, training=True):
-        templates, trigrams = [], []
-        for seq in corpus.words:
-            template, trigram = [], []
-            for word in seq:
-                temp, trig = self.get_feature_template(word)
-                template.append(self.templates2id(temp))
-                trigram.append(self.trigrams2id(trig))
-            templates.append(torch.tensor(template))
-            trigrams.append(pad_sequence(trigram, True))
-
+        words = [self.word2id(seq) for seq in corpus.words]
         if not training:
-            return templates, trigrams
+            return (words, )
         labels = [self.label2id(seq) for seq in corpus.labels]
 
-        return templates, trigrams, labels
+        return words, labels
 
     def get_feature_template(self, word):
         template, tri_grams = [], set()
@@ -129,13 +120,11 @@ class Vocab(object):
         return template, tri_grams
 
     def templates2id(self, templates):
-        ids = [self.pad_index] * 4
-        for i, template in enumerate(templates):
-            ids[i] = self.templates[template]
-        return ids
+        ids = [self.templates.get(t, self.pad_index) for t in templates]
+        return torch.tensor(ids)
 
     def trigrams2id(self, trigrams):
-        ids = [self.tri_grams[gram] for gram in trigrams] 
+        ids = [self.tri_grams.get(gram, self.pad_index) for gram in trigrams] 
         return torch.tensor(ids)
 
     def create_feature_space(self, corpus):
@@ -170,6 +159,17 @@ class Vocab(object):
                 if word in words:
                     d[word].add(label)
         self.possible_dict = dict(d)
+
+    
+    def get_all_words_features(self):
+        templates, trigrams = [], []
+        for word in self.words:
+            template, trigram = self.get_feature_template(word)
+            templates.append(self.templates2id(template))
+            trigrams.append(self.trigrams2id(trigram))
+        templates = pad_sequence(templates, True)
+        trigrams = pad_sequence(trigrams, True)
+        return templates, trigrams
 
 
 

@@ -31,14 +31,15 @@ class Model(object):
             device = "cpu"
         strans_numerator = [torch.full([self.tagger.n_tags], float("-inf")).to(device)]
         etrans_numerator = [torch.full([self.tagger.n_tags], float("-inf")).to(device)]
-        emits_numerator = [torch.full([self.tagger.n_tags, self.tagger.n_words], float("-inf")).to(device)]
+        weight_grad = [torch.full([self.tagger.n_features, self.tagger.n_tags], 0).to(device)]
+        trigram_grad = [torch.full([self.config.n_trigrams], 0).to(device)]
         trans_numerator = [torch.full([self.tagger.n_tags, self.tagger.n_tags], float("-inf")).to(device)]
 
-        for templates, trigrams, _ in loader:
+        for words, labels in loader:
             mask = words.ne(self.vocab.pad_index)
             batch_size, lens = mask.size(0), mask.sum(1)
             max_len= words.size(1)
-            s_emit = self.tagger(words)
+            s_emit, emits = self.tagger(words)
 
             # B*T*N
             alpha = self.tagger.forw(s_emit, mask)
@@ -46,9 +47,11 @@ class Model(object):
             beta = self.pad_left(beta, lens)
             alpha[~mask] = float("-inf")
             beta[~mask] = float("-inf")
+            s_emit[~mask] = float("-inf")
 
             indexes = torch.arange(batch_size).to(words.device)
             logZs = torch.logsumexp(alpha[indexes, lens-1,:] + self.tagger.etrans, dim=1)
+
             assert torch.isfinite(logZs).all()
             gamma = alpha + beta
             posteriors = gamma - logZs.unsqueeze(-1).unsqueeze(-1)
@@ -60,11 +63,31 @@ class Model(object):
             etrans_posterior = torch.logsumexp(posteriors[indexes, lens-1], dim=0)
             etrans_numerator.append(etrans_posterior)
 
-            count = torch.arange(self.tagger.n_words).unsqueeze(0).unsqueeze(0).repeat(batch_size, max_len, 1).to(words.device) == words.unsqueeze(-1)
-            count[~mask] = 0
-            # exp may loss accuracy, use einsum to save memory
-            count_posteriors = torch.log(torch.einsum("bxy, byz->bxz", torch.exp(posteriors.transpose(1,2)), count.float()))
-            emits_numerator.append(torch.logsumexp(count_posteriors, 0))
+
+            feature_counts = self.tagger.all_words_features.unsqueeze(-1) == torch.arange(self.tagger.n_features).unsqueeze(0).unsqueeze(0).to(posteriors.device)
+            feature_counts[self.tagger.all_words_features == 0] = 0
+            all_feature_counts = feature_counts.sum(1).unsqueeze(-1).expand(-1, -1, self.tagger.n_tags)
+            feature_counts = all_feature_counts.unsqueeze(0).expand(batch_size, -1, -1, -1)
+            feature_counts = feature_counts.gather(1, words.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.tagger.n_features, self.tagger.n_tags))
+            feature_counts[~mask] = 0
+            partial_Z = (torch.exp(emits.transpose(0, 1)).unsqueeze(1)* all_feature_counts).sum(0)
+            feature_partial = (feature_counts - partial_Z.unsqueeze(0).unsqueeze(0)) * torch.exp(posteriors).unsqueeze(2)
+            gradients_w = feature_partial.sum(0)
+            gradients_w = gradients_w.sum(0)
+            weight_grad.append(gradients_w)
+
+            trigram_counts = self.tagger.all_words_trigrams.unsqueeze(-1) == torch.arange(self.tagger.n_trigrams).unsqueeze(0).unsqueeze(0).to(posteriors.device)
+            trigram_counts[self.tagger.all_words_trigrams == 0] = 0
+            all_trigram_counts = trigram_counts.sum(1)
+
+            trigram_counts = all_trigram_counts.unsqueeze(0).expand(batch_size, -1, -1)
+            trigram_counts = trigram_counts.gather(1, words.unsqueeze(-1).expand(-1, -1, self.tagger.n_trigrams))
+            trigram_counts[~mask] = 0
+            partial_Z = (torch.exp(emits.transpose(0, 1)).unsqueeze(-1)* all_trigram_counts.unsqueeze(1)).sum(0).sum(0)
+            trigram_partial = (trigram_counts - partial_Z.unsqueeze(0).unsqueeze(0)) * torch.exp(posteriors.sum(-1)).unsqueeze(2)
+            gradients_f = trigram_partial.sum(0)
+            gradients_f = gradients_f.sum(0)
+            trigram_grad.append(gradients_f)
 
             # B*N*1 + B*1*N + B*N*N + B*1*N
             if (lens > 1).any():
@@ -75,7 +98,8 @@ class Model(object):
 
             strans_numerator = [torch.logsumexp(torch.stack(strans_numerator), 0)]
             etrans_numerator = [torch.logsumexp(torch.stack(etrans_numerator), 0)]
-            emits_numerator = [torch.logsumexp(torch.stack(emits_numerator, 0), 0)]
+            weight_grad = [torch.sum(torch.stack(weight_grad, 0), 0)]
+            trigram_grad = [torch.sum(torch.stack(trigram_grad, 0), 0)]
 
             if len(trans_numerator) > 1:
                 trans_numerator = [torch.logsumexp(torch.stack(trans_numerator, 0), 0)]
@@ -87,9 +111,11 @@ class Model(object):
         self.tagger.strans.data = strans_numerator_norm
         self.tagger.etrans.data = etrans_numerator_norm
 
-        emits_numerator = emits_numerator[0]
-        emits_numerator_norm = emits_numerator - torch.logsumexp(emits_numerator,dim=-1).unsqueeze(-1)
-        self.tagger.emits.data = emits_numerator_norm
+        weight_grad = weight_grad[0]
+        self.tagger.weights.data += weight_grad
+
+        trigram_grad = trigram_grad[0]
+        self.tagger.trigram_weights.data += trigram_grad
 
         trans_numerator = trans_numerator[0]
         trans_numerator_sum = torch.logsumexp(trans_numerator, dim=-1)
@@ -106,14 +132,14 @@ class Model(object):
 
         loss, metric, manyToOne = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
         
-        for templates, trigrams, labels in loader:
-            mask = templates.sum(-1).ne(self.vocab.pad_index)
+        for words, labels in loader:
+            mask = words.ne(self.vocab.pad_index)
             lens = mask.sum(dim=1)
             targets = torch.split(labels[mask], lens.tolist())
 
-            s_emit = self.tagger(templates, trigrams)
+            s_emit, _ = self.tagger(words)
             margial = self.tagger.get_logZ(s_emit, mask)
-            loss += -margial * templates.size(0)
+            loss += -margial * words.size(0)
             predicts = self.tagger.viterbi(s_emit, mask)
             metric(predicts, targets)
             manyToOne(predicts, targets)

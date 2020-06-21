@@ -16,7 +16,9 @@ class Tagger(nn.Module):
         self.config = config
         self.n_tags = config.n_labels
         self.n_words = config.n_words
-
+        self.n_features = self.config.n_features
+        self.n_trigrams = self.config.n_trigrams
+        
         trans = torch.ones(self.config.n_labels, self.config.n_labels)
         weights = torch.zeros(self.config.n_features, self.config.n_labels)
         trigram_weights = torch.zeros(self.config.n_trigrams)
@@ -37,6 +39,8 @@ class Tagger(nn.Module):
         self.trigram_weights = nn.Parameter(trigram_weights)
         self.etrans = nn.Parameter(etrans)
 
+
+
     def extra_repr(self):
         info = f"n_tags={self.n_tags}, n_words={self.n_words}"
 
@@ -45,18 +49,20 @@ class Tagger(nn.Module):
     def reset_parameters(self, vocab):
         pass
 
-    def forward(self, templates, trigrams):
-        # get the mask and lengths of given batch
-        batch_size, max_len = templates.size(0), templates.size(1)
+    def forward(self, words):
+        n_words = self.all_words_features.size(0)
+        s_feature = self.weights.unsqueeze(0).expand(n_words, -1, -1).gather(1, self.all_words_features.unsqueeze(-1).expand(-1, -1, self.n_tags))
+        s_feature = s_feature.sum(1)
 
-        # feature score
-        x = self.weights.unsqueeze(0).unsqueeze(0).repeat(batch_size, max_len, 1, 1).gather(2, templates.unsqueeze(-1).repeat(1, 1, 1, self.n_tags))
-        x = x.sum(2)
+        s_trigram = self.trigram_weights.unsqueeze(0).repeat(n_words, 1).gather(1, self.all_words_trigrams)
+        s_trigram = s_trigram.sum(1)
+        emits = s_feature + s_trigram.unsqueeze(-1)
+        emits = torch.log(emits.transpose(0, 1).softmax(dim=-1))
+        
+        batch_size = words.size(0)
+        x = emits.unsqueeze(0).expand(batch_size, -1, -1).gather(-1, words.unsqueeze(1).expand(-1, self.n_tags, -1))
+        return x.transpose(1, 2), emits
 
-        # trigram score
-        y = self.trigram_weights.unsqueeze(0).unsqueeze(0).repeat(batch_size, max_len, 1).gather(2, trigrams)
-        y = y.sum(-1).unsqueeze(-1)
-        return x + y
     
     def forw(self, emit, mask):
         lens = mask.sum(dim=1)
