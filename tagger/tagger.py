@@ -63,42 +63,42 @@ class Tagger(nn.Module):
     def forward(self, words):
         # get the mask and lengths of given batch
         batch_size = words.size(0)
-        emits = self.emits.softmax(dim=-1)
+        emits = self.emits - torch.logsumexp(self.emits, dim=-1).unsqueeze(-1)
         x = emits.unsqueeze(0).repeat(batch_size,1,1).gather(-1, words.unsqueeze(1).repeat(1,self.n_tags,1))
 
         return x.transpose(1, 2)
     
     def get_logZ(self, emit, mask):
-        strans = self.strans.softmax(dim=-1)
-        etrans = self.etrans.softmax(dim=-1)
-        trans = self.trans.softmax(dim=-1)
+        strans = self.strans - torch.logsumexp(self.strans, dim=-1)
+        etrans = self.etrans - torch.logsumexp(self.etrans, dim=-1)
+        trans = self.trans - torch.logsumexp(self.trans, dim=-1).unsqueeze(-1)
 
-        if self.training:
-            strans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
-            etrans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
-            trans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
-            emit.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+        # if self.training:
+        #     strans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+        #     etrans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+        #     trans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+        #     emit.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
 
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
 
-        alpha = torch.log(strans) + torch.log(emit[0])  # [B, N]
+        alpha = strans + emit[0]  # [B, N]
         for i in range(1, T):
-            trans_i = torch.log(trans.unsqueeze(0))  # [1, N, N]
-            emit_i = torch.log(emit[i].unsqueeze(1))  # [B, 1, N]
+            trans_i = trans.unsqueeze(0)  # [1, N, N]
+            emit_i = emit[i].unsqueeze(1)  # [B, 1, N]
             mask_i = mask[i].unsqueeze(1).expand_as(alpha)  # [B, N]
             scores = trans_i + emit_i + alpha.unsqueeze(2)  # [B, N, N]
             scores = torch.logsumexp(scores, dim=1)  # [B, N]
             alpha[mask_i] = scores[mask_i]
-        logZ = torch.logsumexp(alpha + torch.log(etrans), dim=1).sum()
+        logZ = torch.logsumexp(alpha + etrans, dim=1).sum()
 
         return logZ
 
 
     def viterbi(self, emit, mask):
-        strans = self.strans.softmax(dim=-1)
-        etrans = self.etrans.softmax(dim=-1)
-        trans = self.trans.softmax(dim=-1)
+        strans = self.strans - torch.logsumexp(self.strans, dim=-1)
+        etrans = self.etrans - torch.logsumexp(self.etrans, dim=-1)
+        trans = self.trans - torch.logsumexp(self.trans, dim=-1).unsqueeze(-1)
 
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
@@ -106,16 +106,16 @@ class Tagger(nn.Module):
         delta = emit.new_zeros(T, B, N)
         paths = emit.new_zeros(T, B, N, dtype=torch.long)
 
-        delta[0] = torch.log(strans) + torch.log(emit[0])  # [B, N]
+        delta[0] = strans + emit[0]  # [B, N]
         for i in range(1, T):
             trans_i = trans.unsqueeze(0)  # [1, N, N]
             emit_i = emit[i].unsqueeze(1)  # [B, 1, N]
-            scores = torch.log(trans_i) + torch.log(emit_i) + delta[i - 1].unsqueeze(2)  # [B, N, N]
+            scores = trans_i + emit_i + delta[i - 1].unsqueeze(2)  # [B, N, N]
             delta[i], paths[i] = torch.max(scores, dim=1)
 
         predicts = []
         for i, length in enumerate(lens):
-            prev = torch.argmax(delta[length - 1, i] + torch.log(etrans))
+            prev = torch.argmax(delta[length - 1, i] + etrans)
 
             predict = [prev]
             for j in reversed(range(1, length)):
