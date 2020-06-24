@@ -41,10 +41,7 @@ def pad_matrix(seq_matrix, padding_value):
 
 
 def collate_fn(data):
-    reprs = (pad_matrix(i, 0) if i[0].ndimension() > 1 else pad_sequence(i, True, 0) for i in zip(*data))
-    if torch.cuda.is_available():
-        reprs = (i.cuda() for i in reprs)
-
+    reprs = (i[0] for i in zip(*data))
     return reprs
 
 

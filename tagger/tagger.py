@@ -19,26 +19,17 @@ class Tagger(nn.Module):
         self.n_features = self.config.n_features
         self.n_trigrams = self.config.n_trigrams
         
-        trans = torch.ones(self.config.n_labels, self.config.n_labels)
+        trans = torch.zeros(self.config.n_labels, self.config.n_labels)
         weights = torch.zeros(self.config.n_features, self.config.n_labels)
         trigram_weights = torch.zeros(self.config.n_trigrams)
-        strans = torch.ones(self.config.n_labels)
-        etrans = torch.ones(self.config.n_labels)
+        strans = torch.zeros(self.config.n_labels)
+        etrans = torch.zeros(self.config.n_labels)
 
-        nn.init.uniform_(trans, a=0, b=5)
-        nn.init.uniform_(strans, a=0, b=5)
-        nn.init.uniform_(etrans, a=0, b=5)
-
-        strans = torch.log(strans.softmax(dim=-1))
-        etrans = torch.log(etrans.softmax(dim=-1))
-        trans = torch.log(trans.softmax(dim=-1))
-
-        self.trans = nn.Parameter(trans)
-        self.strans = nn.Parameter(strans)
-        self.weights = nn.Parameter(weights)
-        self.trigram_weights = nn.Parameter(trigram_weights)
-        self.etrans = nn.Parameter(etrans)
-
+        self.trans = trans
+        self.strans = strans
+        self.weights = weights
+        self.trigram_weights = trigram_weights
+        self.etrans = etrans
 
 
     def extra_repr(self):
@@ -49,19 +40,15 @@ class Tagger(nn.Module):
     def reset_parameters(self, vocab):
         pass
 
-    def forward(self, words):
-        n_words = self.all_words_features.size(0)
-        s_feature = self.weights.unsqueeze(0).expand(n_words, -1, -1).gather(1, self.all_words_features.unsqueeze(-1).expand(-1, -1, self.n_tags))
-        s_feature = s_feature.sum(1)
+    def forward(self, words, vocab):
+        s_features = [self.weights[vocab.all_words_features[word]].sum(0) for word in words]
+        s_features = torch.stack(s_features, 0)
 
-        s_trigram = self.trigram_weights.unsqueeze(0).repeat(n_words, 1).gather(1, self.all_words_trigrams)
-        s_trigram = s_trigram.sum(1)
-        emits = s_feature + s_trigram.unsqueeze(-1)
-        emits = torch.log(emits.transpose(0, 1).softmax(dim=-1))
-        
-        batch_size = words.size(0)
-        x = emits.unsqueeze(0).expand(batch_size, -1, -1).gather(-1, words.unsqueeze(1).expand(-1, self.n_tags, -1))
-        return x.transpose(1, 2), emits
+        s_trigrams = [self.trigram_weights[vocab.all_words_features[word].sum()] for word in words]
+        s_trigrams = torch.stack(s_trigrams, 0)
+
+        s = s_features + s_trigrams.unsqueeze(-1)
+        return s
 
     
     def forw(self, emit, mask):
@@ -125,7 +112,7 @@ class Tagger(nn.Module):
             alpha[mask_i] = scores[mask_i]
         logZ = torch.logsumexp(alpha + etrans, dim=1).sum()
 
-        return logZ / B
+        return logZ
 
 
     def viterbi(self, emit, mask):

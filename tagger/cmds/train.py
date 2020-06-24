@@ -45,11 +45,8 @@ class Train(object):
             vocab = torch.load(config.vocab)
         config.update({
             'n_words': vocab.n_init,
-            'n_chars': vocab.n_chars,
             'n_labels': vocab.n_labels,
-            'pad_index': vocab.pad_index,
-            'unk_index': vocab.unk_index,
-            'n_features': len(vocab.templates),
+            'n_features': len(vocab.features),
             'n_trigrams': len(vocab.tri_grams)
         })
         print(vocab)
@@ -57,19 +54,15 @@ class Train(object):
         trainset = TextDataset(vocab.numericalize(train))
 
         # set the data loaders
-        train_loader = batchify(trainset, config.batch_size, False)
+        train_loader = batchify(trainset, 1, False)
         print(f"{'train:':6} {len(trainset):5} sentences, {train.nwords} words in total, "
               f"{len(train_loader):3} batches provided")
 
         print("Create the model")
         tagger = Tagger(config)
-        all_words_features, all_words_trigrams = vocab.get_all_words_features()
-        tagger.all_words_features = all_words_features.to(config.device)
-        tagger.all_words_trigrams = all_words_trigrams.to(config.device)
-        tagger = tagger.to(config.device)
+        vocab.get_all_words_features()
         print(f"{tagger}\n")
         model = Model(config, vocab, tagger)
-
         total_time = timedelta()
         best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
         last_loss, count = 0, 0

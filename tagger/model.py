@@ -24,36 +24,26 @@ class Model(object):
 
     @torch.no_grad()
     def train(self, loader):
-        self.tagger.train()
-        if torch.cuda.is_available():
-            device = "cuda"
-        else:
-            device = "cpu"
-        strans_numerator = [torch.full([self.tagger.n_tags], float("-inf")).to(device)]
-        etrans_numerator = [torch.full([self.tagger.n_tags], float("-inf")).to(device)]
-        weight_grad = [torch.full([self.tagger.n_features, self.tagger.n_tags], 0).to(device)]
-        trigram_grad = [torch.full([self.config.n_trigrams], 0).to(device)]
-        trans_numerator = [torch.full([self.tagger.n_tags, self.tagger.n_tags], float("-inf")).to(device)]
+        strans_grad = [torch.full([self.tagger.n_tags], 0)]
+        etrans_grad = [torch.full([self.tagger.n_tags], 0)]
+        weight_grad = [torch.full([self.tagger.n_features, self.tagger.n_tags], 0)]
+        trigram_grad = [torch.full([self.config.n_trigrams], 0)]
+        trans_grad = [torch.full([self.tagger.n_tags, self.tagger.n_tags], 0)]
 
         for words, labels in loader:
-            mask = words.ne(self.vocab.pad_index)
-            batch_size, lens = mask.size(0), mask.sum(1)
-            max_len= words.size(1)
-            s_emit, emits = self.tagger(words)
+            mask = words.ge(0).unsqueeze(0)
+            length = len(words)
+            s_emit = self.tagger(words, self.vocab)
+            s_emit = s_emit.unsqueeze(0)
 
             # B*T*N
-            alpha = self.tagger.forw(s_emit, mask)
-            beta = self.tagger.back(s_emit, mask)
-            beta = self.pad_left(beta, lens)
-            alpha[~mask] = float("-inf")
-            beta[~mask] = float("-inf")
-            s_emit[~mask] = float("-inf")
-
-            indexes = torch.arange(batch_size).to(words.device)
-            logZs = torch.logsumexp(alpha[indexes, lens-1,:] + self.tagger.etrans, dim=1)
-
-            assert torch.isfinite(logZs).all()
+            alpha = self.tagger.forw(s_emit, mask)[0]
+            beta = self.tagger.back(s_emit, mask)[0]
+            logZ = torch.logsumexp(alpha[length-1,:] + self.tagger.etrans, dim=0)
+            assert torch.isfinite(logZ).all()
             gamma = alpha + beta
+
+            
             posteriors = gamma - logZs.unsqueeze(-1).unsqueeze(-1)
             posteriors[~mask] = float('-inf')
 
@@ -133,16 +123,17 @@ class Model(object):
         loss, metric, manyToOne = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
         
         for words, labels in loader:
-            mask = words.ne(self.vocab.pad_index)
-            lens = mask.sum(dim=1)
-            targets = torch.split(labels[mask], lens.tolist())
+            length = len(words)
 
-            s_emit, _ = self.tagger(words)
+            s_emit = self.tagger(words, self.vocab)
+            s_emit, mask = s_emit.unsqueeze(0), words.ge(0).unsqueeze(0)
             margial = self.tagger.get_logZ(s_emit, mask)
-            loss += -margial * words.size(0)
+            loss += -margial
+
             predicts = self.tagger.viterbi(s_emit, mask)
-            metric(predicts, targets)
-            manyToOne(predicts, targets)
+            labels = labels.unsqueeze(0)
+            metric(predicts, labels)
+            manyToOne(predicts, labels)
 
         loss /= len(loader.dataset)
 
