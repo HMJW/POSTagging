@@ -22,10 +22,10 @@ class Tagger(nn.Module):
         strans = torch.ones(self.config.n_labels)
         etrans = torch.ones(self.config.n_labels)
 
-        nn.init.uniform_(trans, a=0, b=5)
-        nn.init.uniform_(emits, a=0, b=5)
-        nn.init.uniform_(strans, a=0, b=5)
-        nn.init.uniform_(etrans, a=0, b=5)
+        nn.init.normal_(trans, 0, 3)
+        nn.init.normal_(emits, 0, 3)
+        nn.init.normal_(strans, 0, 3)
+        nn.init.normal_(etrans, 0, 3)
 
         self.trans = nn.Parameter(trans)
         self.strans = nn.Parameter(strans)
@@ -44,10 +44,10 @@ class Tagger(nn.Module):
         strans = torch.ones(self.config.n_labels)
         etrans = torch.ones(self.config.n_labels)
 
-        nn.init.uniform_(trans, a=0, b=5)
-        nn.init.uniform_(emits, a=0, b=5)
-        nn.init.uniform_(strans, a=0, b=5)
-        nn.init.uniform_(etrans, a=0, b=5)
+        nn.init.normal_(trans, 0, 3)
+        nn.init.normal_(emits, 0, 3)
+        nn.init.normal_(strans, 0, 3)
+        nn.init.normal_(etrans, 0, 3)
 
         emits[:, vocab.pad_index] = float("-inf")
         for word, plabels in vocab.possible_dict.items():
@@ -73,11 +73,11 @@ class Tagger(nn.Module):
         etrans = self.etrans - torch.logsumexp(self.etrans, dim=-1)
         trans = self.trans - torch.logsumexp(self.trans, dim=-1).unsqueeze(-1)
 
-        # if self.training:
-        #     strans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
-        #     etrans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
-        #     trans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
-        #     emit.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+        if self.training:
+            strans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+            etrans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+            trans.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
+            emit.register_hook(lambda x: x.masked_fill_(~torch.isfinite(x), 0))
 
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape

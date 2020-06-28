@@ -9,7 +9,7 @@ from tagger.utils.data import TextDataset, batchify
 
 import torch
 from torch.optim import Adam, SGD
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import LambdaLR
 
 
 class Train(object):
@@ -65,7 +65,12 @@ class Train(object):
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         optimizer = Adam(tagger.parameters(), config.lr)
-        scheduler = ExponentialLR(optimizer, gamma=0.95)
+        def func(epoch):
+            if epoch > 40:
+                return 0.95 ** (epoch - 40)
+            else:
+                return 1
+        scheduler = LambdaLR(optimizer, func)
         model = Model(config, vocab, tagger, optimizer, scheduler)
 
         total_time = timedelta()
