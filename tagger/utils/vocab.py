@@ -107,7 +107,7 @@ class Vocab(object):
             template.append("<Cap>")
         
         # 1-gram
-        tri_grams = tri_grams & set(word)
+        tri_grams = tri_grams | set(word)
 
         # 2-gram
         for i in range(1, len(word)):

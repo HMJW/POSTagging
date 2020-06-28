@@ -9,7 +9,7 @@ from tagger.utils.data import TextDataset, batchify
 
 import torch
 from torch.optim import Adam
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import LambdaLR
 
 
 class Train(object):
@@ -18,7 +18,7 @@ class Train(object):
         subparser = parser.add_parser(
             name, help='Train a model.'
         )
-        subparser.add_argument('--ftrain', default='data/PTB/debug.tsv',
+        subparser.add_argument('--ftrain', default='data/PTB/train.tsv',
                                help='path to train file')
         subparser.add_argument('--fdev', default='data/PTB/dev.tsv',
                                help='path to dev file')
@@ -34,7 +34,7 @@ class Train(object):
         train = Corpus.load(config.ftrain)
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
-        # train = train + dev + test
+        train = train + dev + test
         # train.sentences = train.sentences[:]
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
@@ -68,7 +68,9 @@ class Train(object):
         tagger.all_words_trigrams = all_words_trigrams.to(config.device)
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
-        model = Model(config, vocab, tagger)
+        
+        optimizer = Adam(tagger.parameters(), config.lr)
+        model = Model(config, vocab, tagger, optimizer)
 
         total_time = timedelta()
         best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
@@ -104,8 +106,8 @@ class Train(object):
                 break
         model.tagger = Tagger.load(config.model)
         all_words_features, all_words_trigrams = vocab.get_all_words_features()
-        tagger.all_words_features = all_words_features.to(config.device)
-        tagger.all_words_trigrams = all_words_trigrams.to(config.device)
+        model.tagger.all_words_features = all_words_features.to(config.device)
+        model.tagger.all_words_trigrams = all_words_trigrams.to(config.device)
         loss, _, many2one = model.evaluate(train_loader)
 
         print(f"max score of test is {best_metric.score:.2%} at epoch {best_e}")
