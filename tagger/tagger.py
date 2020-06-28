@@ -40,15 +40,20 @@ class Tagger(nn.Module):
     def reset_parameters(self, vocab):
         pass
 
-    def forward(self, words, vocab):
-        s_features = [self.weights[vocab.all_words_features[word]].sum(0) for word in words]
+    def get_emits(self, vocab):
+        s_features = [self.weights[features].sum(0) for features in vocab.all_words_features]
         s_features = torch.stack(s_features, 0)
 
-        s_trigrams = [self.trigram_weights[vocab.all_words_features[word].sum()] for word in words]
+        s_trigrams = [self.trigram_weights[trigrams].sum() for trigrams in vocab.all_words_trigrams]
         s_trigrams = torch.stack(s_trigrams, 0)
 
         s = s_features + s_trigrams.unsqueeze(-1)
-        return s
+        emits = s - torch.logsumexp(s, dim=-1).unsqueeze(-1)
+        return emits
+
+
+    def forward(self, words, emits):
+        return emits[words]
 
     
     def forw(self, emit, mask):
@@ -95,9 +100,9 @@ class Tagger(nn.Module):
 
 
     def get_logZ(self, emit, mask):
-        strans = self.strans
-        etrans = self.etrans
-        trans = self.trans
+        strans = self.strans - torch.logsumexp(self.strans, dim=-1)
+        etrans = self.etrans - torch.logsumexp(self.etrans, dim=-1)
+        trans = self.trans - torch.logsumexp(self.trans, dim=-1).unsqueeze(-1)
         
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape

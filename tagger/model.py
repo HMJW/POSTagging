@@ -122,10 +122,11 @@ class Model(object):
 
         loss, metric, manyToOne = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
         
+        emits = self.tagger.get_emits(self.vocab)
         for words, labels in loader:
             length = len(words)
 
-            s_emit = self.tagger(words, self.vocab)
+            s_emit = self.tagger(words, emits)
             s_emit, mask = s_emit.unsqueeze(0), words.ge(0).unsqueeze(0)
             margial = self.tagger.get_logZ(s_emit, mask)
             loss += -margial
