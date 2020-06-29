@@ -29,7 +29,7 @@ if __name__ == '__main__':
                                help='ID of GPU to use')
         subparser.add_argument('--preprocess', '-p', action='store_true',
                                help='whether to preprocess the data first')
-        subparser.add_argument('--seed', '-s', default=1, type=int,
+        subparser.add_argument('--seed', '-s', default=3, type=int,
                                help='seed for generating random numbers')
         subparser.add_argument('--threads', '-t', default=4, type=int,
                                help='max num of threads')

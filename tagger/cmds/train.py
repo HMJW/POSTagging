@@ -65,13 +65,7 @@ class Train(object):
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         optimizer = Adam(tagger.parameters(), config.lr)
-        def func(epoch):
-            if epoch > 40:
-                return 0.95 ** (epoch - 40)
-            else:
-                return 1
-        scheduler = LambdaLR(optimizer, func)
-        model = Model(config, vocab, tagger, optimizer, scheduler)
+        model = Model(config, vocab, tagger, optimizer)
 
         total_time = timedelta()
         best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
