@@ -167,9 +167,8 @@ class Vocab(object):
             template, trigram = self.get_feature_template(word)
             templates.append(self.templates2id(template))
             trigrams.append(self.trigrams2id(trigram))
-        templates = pad_sequence(templates, True)
-        trigrams = pad_sequence(trigrams, True)
-        return templates, trigrams
+        self.all_words_features = templates
+        self.all_words_trigrams = trigrams
 
 
 

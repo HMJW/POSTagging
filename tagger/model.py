@@ -21,11 +21,12 @@ class Model(object):
 
         self.optimizer.zero_grad()
         for words, _ in loader:
-            emits = self.tagger.get_emits()
+            emits = self.tagger.get_emits(self.vocab)
             mask = words.ne(self.vocab.pad_index)
             s_emit = self.tagger(words, emits)
             likelyhood = self.tagger.get_logZ(s_emit, mask)
             loss = - likelyhood
+            print(loss)
             loss.backward()
         self.optimizer.step()
         if self.scheduler is not None:
@@ -36,7 +37,7 @@ class Model(object):
         self.tagger.eval()
 
         loss, metric, manyToOne = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
-        emits = self.tagger.get_emits()
+        emits = self.tagger.get_emits(self.vocab)
 
         for words, labels in loader:
             mask = words.ne(self.vocab.pad_index)

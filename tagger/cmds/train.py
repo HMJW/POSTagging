@@ -35,10 +35,11 @@ class Train(object):
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
         train = train + dev + test
-        # train.sentences = train.sentences[:]
+
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
             vocab.create_feature_space(train)
+            vocab.get_all_words_features()
             vocab.collect(corpus=train, min_freq=1)
             torch.save(vocab, config.vocab)
         else:
@@ -63,9 +64,6 @@ class Train(object):
 
         print("Create the model")
         tagger = Tagger(config)
-        all_words_features, all_words_trigrams = vocab.get_all_words_features()
-        tagger.all_words_features = all_words_features.to(config.device)
-        tagger.all_words_trigrams = all_words_trigrams.to(config.device)
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         
@@ -105,9 +103,6 @@ class Train(object):
             if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        all_words_features, all_words_trigrams = vocab.get_all_words_features()
-        model.tagger.all_words_features = all_words_features.to(config.device)
-        model.tagger.all_words_trigrams = all_words_trigrams.to(config.device)
         loss, _, many2one = model.evaluate(train_loader)
 
         print(f"max score of test is {best_metric.score:.2%} at epoch {best_e}")
