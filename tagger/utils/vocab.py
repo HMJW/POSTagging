@@ -29,7 +29,6 @@ class Vocab(object):
         label = [len(y) for _, y in self.possible_dict.items()]
         s += f"{sum(label)/len(label):.2f} avg labels in dict, "
         s += f"{len(self.features)} n_features, "
-        s += f"{len(self.tri_grams)} n_trigrams"
         return s
 
     def word2id(self, sequence):
@@ -53,52 +52,45 @@ class Vocab(object):
         return words, labels
 
     def get_feature_template(self, word):
-        template, tri_grams = [], set()
+        template = set()
         
-        template.append(word)
+        template.add(word)
 
         if bool(re.search(r'\d', word)):
-            template.append("<containsDigit>")
+            template.add("<containsDigit>")
 
         if bool(re.search(r'-', word)):
-            template.append("<containsHyphen>")
+            template.add("<containsHyphen>")
         
         if word.istitle():
-            template.append("<Cap>")
+            template.add("<Cap>")
         
         # 1-gram
-        tri_grams = tri_grams | set(word)
+        template = template | set(word)
 
         # 2-gram
         for i in range(1, len(word)):
-            tri_grams.add(word[i-1:i+1])
+            template.add(word[i-1:i+1])
 
         # 3-gram
         for i in range(2, len(word)):
-            tri_grams.add(word[i-2:i+1])
+            template.add(word[i-2:i+1])
         
-        return template, tri_grams
+        return template
 
     def templates2id(self, templates):
         ids = [self.features.get(t, 0) for t in templates]
         return torch.tensor(ids)
 
-    def trigrams2id(self, trigrams):
-        ids = [self.tri_grams.get(gram, 0) for gram in trigrams] 
-        return torch.tensor(ids)
 
     def create_feature_space(self, corpus):
         self.features = {}
-        self.tri_grams = {}
         for seq in corpus.words:
             for word in seq:
-                template, tri_grams = self.get_feature_template(word)
+                template = self.get_feature_template(word)
                 for t in template:
                     if t not in self.features:
                         self.features[t] = len(self.features)
-                for gram in tri_grams:
-                    if gram not in self.tri_grams:
-                        self.tri_grams[gram] = len(self.tri_grams)
 
     @classmethod
     def from_corpus(cls, corpus, min_freq=1):
@@ -121,13 +113,11 @@ class Vocab(object):
 
     
     def get_all_words_features(self):
-        templates, trigrams = [], []
+        templates = []
         for word in self.words:
-            template, trigram = self.get_feature_template(word)
+            template = self.get_feature_template(word)
             templates.append(self.templates2id(template))
-            trigrams.append(self.trigrams2id(trigram))
         self.all_words_features = templates
-        self.all_words_trigrams = trigrams
 
 
 

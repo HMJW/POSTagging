@@ -18,7 +18,7 @@ class Train(object):
         subparser = parser.add_parser(
             name, help='Train a model.'
         )
-        subparser.add_argument('--ftrain', default='data/PTB/debug.tsv',
+        subparser.add_argument('--ftrain', default='data/PTB/train.tsv',
                                help='path to train file')
         subparser.add_argument('--fdev', default='data/PTB/dev.tsv',
                                help='path to dev file')
@@ -35,7 +35,7 @@ class Train(object):
         dev = Corpus.load(config.fdev)
         test = Corpus.load(config.ftest)
         # train = train + dev + test
-        # train.sentences = train.sentences[:]
+        train.sentences = train.sentences[:100]
         if config.preprocess or not os.path.exists(config.vocab):
             vocab = Vocab.from_corpus(corpus=train, min_freq=1)
             vocab.create_feature_space(train)
@@ -47,7 +47,6 @@ class Train(object):
             'n_words': vocab.n_init,
             'n_labels': vocab.n_labels,
             'n_features': len(vocab.features),
-            'n_trigrams': len(vocab.tri_grams)
         })
         print(vocab)
         print("Load the dataset")
@@ -96,9 +95,6 @@ class Train(object):
             if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        all_words_features, all_words_trigrams = vocab.get_all_words_features()
-        tagger.all_words_features = all_words_features.to(config.device)
-        tagger.all_words_trigrams = all_words_trigrams.to(config.device)
         loss, _, many2one = model.evaluate(train_loader)
 
         print(f"max score of test is {best_metric.score:.2%} at epoch {best_e}")

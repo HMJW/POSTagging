@@ -21,14 +21,17 @@ class Tagger(nn.Module):
         
         trans = torch.zeros(self.config.n_labels, self.config.n_labels)
         weights = torch.zeros(self.config.n_features, self.config.n_labels)
-        trigram_weights = torch.zeros(self.config.n_trigrams)
         strans = torch.zeros(self.config.n_labels)
         etrans = torch.zeros(self.config.n_labels)
+
+        # nn.init.uniform_(trans, a=0, b=3)
+        # nn.init.uniform_(weights, a=0, b=3)
+        # nn.init.uniform_(strans, a=0, b=3)
+        # nn.init.uniform_(etrans, a=0, b=3)
 
         self.trans = trans
         self.strans = strans
         self.weights = weights
-        self.trigram_weights = trigram_weights
         self.etrans = etrans
 
 
@@ -43,12 +46,7 @@ class Tagger(nn.Module):
     def get_emits(self, vocab):
         s_features = [self.weights[features].sum(0) for features in vocab.all_words_features]
         s_features = torch.stack(s_features, 0)
-
-        s_trigrams = [self.trigram_weights[trigrams].sum() for trigrams in vocab.all_words_trigrams]
-        s_trigrams = torch.stack(s_trigrams, 0)
-
-        s = s_features + s_trigrams.unsqueeze(-1)
-        emits = s - torch.logsumexp(s, dim=-1).unsqueeze(-1)
+        emits = s_features - torch.logsumexp(s_features, dim=0)
         return emits
 
 
@@ -57,14 +55,16 @@ class Tagger(nn.Module):
 
     
     def forw(self, emit, mask):
-        lens = mask.sum(dim=1)
+        strans = self.strans - torch.logsumexp(self.strans, dim=-1)
+        trans = self.trans - torch.logsumexp(self.trans, dim=-1).unsqueeze(-1)
+
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
         alpha = emit.new_zeros(T, B, N)
 
-        alpha[0] = self.strans + emit[0]  # [B, N]
+        alpha[0] = strans + emit[0]  # [B, N]
         for i in range(1, T):
-            trans_i = self.trans.unsqueeze(0)  # [1, N, N]
+            trans_i = trans.unsqueeze(0)  # [1, N, N]
             emit_i = emit[i].unsqueeze(1)  # [B, 1, N]
             mask_i = mask[i].unsqueeze(1).expand_as(alpha[i-1])  # [B, N]
             scores = trans_i + emit_i + alpha[i-1].unsqueeze(2)  # [B, N, N]
@@ -80,15 +80,19 @@ class Tagger(nn.Module):
             for i, length in enumerate(lens):
                 res[i, -length:] = tensor[i, :length]
             return res
+
+        etrans = self.etrans - torch.logsumexp(self.etrans, dim=-1)
+        trans = self.trans - torch.logsumexp(self.trans, dim=-1).unsqueeze(-1)
+
         lens = mask.sum(dim=1)
         emit, mask = pad_right(emit, lens), pad_right(mask, lens)
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape    
         beta = emit.new_zeros(T, B, N)
 
-        beta[-1] = self.etrans  # [B, N]
+        beta[-1] = etrans  # [B, N]
         for i in range(1, T):
-            trans_i = self.trans.unsqueeze(0)  # [1, N, N]
+            trans_i = trans.unsqueeze(0)  # [1, N, N]
             emit_i = emit[-i]  # [B, N]
             mask_i = mask[-i-1].unsqueeze(1).expand_as(beta[-i])  # [B, N]
             scores = trans_i + (emit_i + beta[-i]).unsqueeze(1)  # [B, N, N]
@@ -115,28 +119,33 @@ class Tagger(nn.Module):
             scores = trans_i + emit_i + alpha.unsqueeze(2)  # [B, N, N]
             scores = torch.logsumexp(scores, dim=1)  # [B, N]
             alpha[mask_i] = scores[mask_i]
-        logZ = torch.logsumexp(alpha + etrans, dim=1).sum()
+        logZ = torch.logsumexp(alpha + etrans, dim=1)
+        logZ = logZ.sum()
 
         return logZ
 
 
     def viterbi(self, emit, mask):
+        strans = self.strans - torch.logsumexp(self.strans, dim=-1)
+        etrans = self.etrans - torch.logsumexp(self.etrans, dim=-1)
+        trans = self.trans - torch.logsumexp(self.trans, dim=-1).unsqueeze(-1)
+
         emit, mask = emit.transpose(0, 1), mask.t()
         T, B, N = emit.shape
         lens = mask.sum(dim=0)
         delta = emit.new_zeros(T, B, N)
         paths = emit.new_zeros(T, B, N, dtype=torch.long)
 
-        delta[0] = self.strans + emit[0]  # [B, N]
+        delta[0] = strans + emit[0]  # [B, N]
         for i in range(1, T):
-            trans_i = self.trans.unsqueeze(0)  # [1, N, N]
+            trans_i = trans.unsqueeze(0)  # [1, N, N]
             emit_i = emit[i].unsqueeze(1)  # [B, 1, N]
             scores = trans_i + emit_i + delta[i - 1].unsqueeze(2)  # [B, N, N]
             delta[i], paths[i] = torch.max(scores, dim=1)
 
         predicts = []
         for i, length in enumerate(lens):
-            prev = torch.argmax(delta[length - 1, i] + self.etrans)
+            prev = torch.argmax(delta[length - 1, i] + etrans)
 
             predict = [prev]
             for j in reversed(range(1, length)):
