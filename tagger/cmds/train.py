@@ -67,7 +67,7 @@ class Train(object):
         tagger = tagger.to(config.device)
         print(f"{tagger}\n")
         
-        optimizer = Adam(tagger.parameters(), config.lr)
+        optimizer = Adam(tagger.parameters(), config.lr, weight_decay=config.decay)
         model = Model(config, vocab, tagger, optimizer)
 
         total_time = timedelta()

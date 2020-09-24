@@ -26,7 +26,6 @@ class Model(object):
             s_emit = self.tagger(words, emits)
             likelyhood = self.tagger.get_logZ(s_emit, mask)
             loss = - likelyhood
-            print(loss)
             loss.backward()
         self.optimizer.step()
         if self.scheduler is not None:

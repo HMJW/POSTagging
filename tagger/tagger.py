@@ -25,11 +25,11 @@ class Tagger(nn.Module):
         strans = torch.zeros(self.config.n_labels)
         etrans = torch.zeros(self.config.n_labels)
 
-        # nn.init.normal_(trans, 0, 5)
-        # nn.init.normal_(strans, 0, 5)
-        # nn.init.normal_(etrans, 0, 5)
-        # nn.init.normal_(weights, 0, 5)
-        # nn.init.normal_(trigram_weights, 0, 5)
+        nn.init.normal_(trans, 0, 3)
+        nn.init.normal_(strans, 0, 3)
+        nn.init.normal_(etrans, 0, 3)
+        nn.init.uniform_(weights, -3, 3)
+        nn.init.uniform_(trigram_weights, -3, 3)
 
         self.trans = nn.Parameter(trans)
         self.strans = nn.Parameter(strans)

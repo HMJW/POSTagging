@@ -128,17 +128,19 @@ class Vocab(object):
         return torch.tensor(ids)
 
     def create_feature_space(self, corpus):
-        self.templates = {self.pad:0, self.unk:1}
-        self.tri_grams = {self.pad:0, self.unk:1}
+        templates = {}
+        tri_grams = {}
         for seq in corpus.words:
             for word in seq:
                 template, tri_grams = self.get_feature_template(word)
                 for t in template:
-                    if t not in self.templates:
-                        self.templates[t] = len(self.templates)
+                    templates.add(t)
                 for gram in tri_grams:
-                    if gram not in self.tri_grams:
-                        self.tri_grams[gram] = len(self.tri_grams)
+                    tri_grams.add(t)
+        templates = [self.pad, self.unk] + sorted(templates)
+        tri_grams = [self.pad, self.unk] + sorted(tri_grams)
+        self.templates = {t:i for i, t in enumerate(templates)}
+        self.tri_grams = {t:i for i, t in enumerate(tri_grams)}
 
     @classmethod
     def from_corpus(cls, corpus, min_freq=1):
