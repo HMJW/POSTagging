@@ -68,7 +68,7 @@ class Train(object):
 
         total_time = timedelta()
         best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
-        last_loss, count = 0, 0
+        count = 0
 
         loss, acc_metric, manytoOne_metric = model.evaluate(train_loader)
         print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {acc_metric}")
@@ -84,16 +84,13 @@ class Train(object):
 
             t = datetime.now() - start
             # save the model if it is the best so far
-            if epoch > 1 and abs(last_loss - loss) <= 2e-5:
-                count += 1
-            else:
-                count = 0
-            last_loss = loss
             if manytoOne_metric > best_metric:
+                count += 1
                 best_e, best_metric = epoch, manytoOne_metric
                 model.tagger.save(config.model)
                 print(f"{t}s elapsed (saved)\n")
             else:
+                count = 0
                 print(f"{t}s elapsed\n")
             total_time += t
             if count >= config.patience:
