@@ -47,13 +47,18 @@ class Tagger(nn.Module):
         pass
     
     def get_emits(self, vocab):
-        s_features = [self.weights[features].sum(0) for features in vocab.all_words_features]
-        s_features = torch.stack(s_features, 0)
+        if torch.cuda.is_available():
+            all_words_features = vocab.all_words_features.cuda()
+            all_words_trigrams = vocab.all_words_trigrams.cuda()
+        else:
+            all_words_features = vocab.all_words_features
+            all_words_trigrams = vocab.all_words_trigrams
 
-        s_trigrams = [self.trigram_weights[trigrams].sum() for trigrams in vocab.all_words_trigrams]
-        s_trigrams = torch.stack(s_trigrams, 0)
+        s_features = all_words_features.mm(self.weights)
 
-        emits = s_features + s_trigrams.unsqueeze(-1)
+        s_trigrams = all_words_trigrams.mm(self.trigram_weights.unsqueeze(-1))
+
+        emits = s_features + s_trigrams
         emits = emits.transpose(0, 1)
         emits = emits - torch.logsumexp(emits, dim=-1).unsqueeze(-1)
         return emits

@@ -164,11 +164,13 @@ class Vocab(object):
 
     
     def get_all_words_features(self):
-        templates, trigrams = [], []
-        for word in self.words:
+        templates, trigrams = torch.zeros(self.n_init, len(self.templates)), torch.zeros(self.n_init, len(self.tri_grams))
+        for i, word in enumerate(self.words):
             template, trigram = self.get_feature_template(word)
-            templates.append(self.templates2id(template))
-            trigrams.append(self.trigrams2id(trigram))
+            template = self.templates2id(template)
+            trigram = self.trigrams2id(trigram)
+            templates[i][template] = 1
+            trigrams[i][trigram] = 1
         self.all_words_features = templates
         self.all_words_trigrams = trigrams
 

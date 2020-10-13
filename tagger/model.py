@@ -3,6 +3,7 @@
 from tagger.metric import AccuracyMethod, ManyToOneAccuracy
 import torch
 import torch.nn as nn
+import time
 
 
 class Model(object):
@@ -20,16 +21,17 @@ class Model(object):
         self.tagger.train()
 
         self.optimizer.zero_grad()
+        emits = self.tagger.get_emits(self.vocab)
         for words, _ in loader:
-            emits = self.tagger.get_emits(self.vocab)
             mask = words.ne(self.vocab.pad_index)
             s_emit = self.tagger(words, emits)
             likelyhood = self.tagger.get_logZ(s_emit, mask)
             loss = - likelyhood
-            loss.backward()
+            loss.backward(retain_graph=True)
         self.optimizer.step()
         if self.scheduler is not None:
             self.scheduler.step()
+        self.optimizer.zero_grad()
 
     @torch.no_grad()
     def evaluate(self, loader):
