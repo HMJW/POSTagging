@@ -157,7 +157,8 @@ class ManyToOneAccuracy(Metric):
 
     def __call__(self, preds, golds):
         for pred, gold in zip(preds, golds):
-            self.clusters[pred, gold] += 1
+            for x, y in zip(pred, gold):
+                self.clusters[x, y] += 1
 
     def __repr__(self):
         return f"Many-to-one Accuracy: {self.accuracy:.2%}"

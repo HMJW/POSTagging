@@ -13,9 +13,9 @@ class Evaluate(object):
         subparser = parser.add_parser(
             name, help='Evaluate the specified model and dataset.'
         )
-        subparser.add_argument('--batch-size', default=64, type=int,
+        subparser.add_argument('--batch-size', default=512, type=int,
                                help='batch size')
-        subparser.add_argument('--fdata', default='data/PTB/test.tsv',
+        subparser.add_argument('--fdata', default='data/PTB/total.tsv',
                                help='path to dataset')
         return subparser
 
@@ -30,7 +30,8 @@ class Evaluate(object):
         dataset = TextDataset(vocab.numericalize(corpus))
         # set the data loader
         loader = batchify(dataset, config.batch_size)
-
+        print(f"{'train:':6} {len(corpus):5} sentences, {corpus.nwords} words in total, "
+              f"{len(loader):3} batches provided")
         print("Evaluate the dataset")
         loss, acc_metric, many2one_metric = model.evaluate(loader,)
-        print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {acc_metric}")
+        print(f"{'train:':6} Loss: {loss:.4f} {many2one_metric} {acc_metric}")
