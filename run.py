@@ -21,9 +21,9 @@ if __name__ == '__main__':
         subparser = subcommand.add_subparser(name, subparsers)
         subparser.add_argument('--conf', '-c', default='config.ini',
                                help='path to config file')
-        subparser.add_argument('--model', '-m', default='exp/debug/model.char',
+        subparser.add_argument('--model', '-m', default='exp/featured-HMM-7/model.pt',
                                help='path to model file')
-        subparser.add_argument('--vocab', '-v', default='exp/debug/vocab.char',
+        subparser.add_argument('--vocab', '-v', default='exp/featured-HMM-7/vocab.pt',
                                help='path to vocab file')
         subparser.add_argument('--device', '-d', default='-1',
                                help='ID of GPU to use')

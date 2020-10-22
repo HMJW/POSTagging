@@ -34,7 +34,7 @@ class Model(object):
         self.optimizer.zero_grad()
 
     @torch.no_grad()
-    def evaluate(self, loader):
+    def evaluate(self, loader, need_metric=False):
         self.tagger.eval()
 
         loss, metric, manyToOne = 0, AccuracyMethod(), ManyToOneAccuracy(self.vocab.n_labels)
@@ -49,9 +49,10 @@ class Model(object):
 
             likelyhood = self.tagger.get_logZ(s_emit, mask)
             loss += -likelyhood
-            predicts = self.tagger.viterbi(s_emit, mask)
-            metric(predicts, targets)
-            manyToOne(predicts, targets)
+            if need_metric:
+                predicts = self.tagger.viterbi(s_emit, mask)
+                metric(predicts, targets)
+                manyToOne(predicts, targets)
 
         loss /= len(loader.dataset)
 

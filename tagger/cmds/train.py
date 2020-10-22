@@ -8,7 +8,7 @@ from tagger.utils import Corpus, Embedding, Vocab
 from tagger.utils.data import TextDataset, batchify
 
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import LambdaLR
 
 
@@ -74,8 +74,8 @@ class Train(object):
         best_e, best_metric = 1, ManyToOneAccuracy(vocab.n_labels)
         last_loss, count = 0, 0
 
-        loss, acc_metric, manytoOne_metric = model.evaluate(train_loader)
-        print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {acc_metric}")
+        # loss, acc_metric, manytoOne_metric = model.evaluate(train_loader)
+        # print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {acc_metric}")
 
         for epoch in range(1, config.epochs + 1):
             start = datetime.now()
@@ -84,28 +84,29 @@ class Train(object):
 
             print(f"Epoch {epoch} / {config.epochs}:")
             loss, train_metric, manytoOne_metric = model.evaluate(train_loader)
-            print(f"{'train:':6} Loss: {loss:.4f} {manytoOne_metric} {train_metric}")
+            print(f"{'train:':6} Loss: {loss:.4f}")
 
             t = datetime.now() - start
             # save the model if it is the best so far
-            if epoch > 1 and abs(last_loss - loss) <= 2e-5:
+            if epoch > 1 and (abs(last_loss - loss) <= 2e-4 or last_loss < loss):
                 count += 1
             else:
                 count = 0
-            last_loss = loss
-            if manytoOne_metric > best_metric:
-                best_e, best_metric = epoch, manytoOne_metric
+
+            if loss < last_loss:
                 model.tagger.save(config.model)
+                best_e = epoch
                 print(f"{t}s elapsed (saved)\n")
             else:
                 print(f"{t}s elapsed\n")
+            last_loss = loss
+
             total_time += t
             if count >= config.patience:
                 break
         model.tagger = Tagger.load(config.model)
-        loss, _, many2one = model.evaluate(train_loader)
+        loss, _, many2one = model.evaluate(train_loader, need_metric=True)
 
-        print(f"max score of test is {best_metric.score:.2%} at epoch {best_e}")
         print(f"the score of test at epoch {best_e} is {many2one.score:.2%}")
         print(f"average time of each epoch is {total_time / epoch}s")
         print(f"{total_time}s elapsed")

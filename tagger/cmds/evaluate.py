@@ -33,5 +33,5 @@ class Evaluate(object):
         print(f"{'train:':6} {len(corpus):5} sentences, {corpus.nwords} words in total, "
               f"{len(loader):3} batches provided")
         print("Evaluate the dataset")
-        loss, acc_metric, many2one_metric = model.evaluate(loader,)
+        loss, acc_metric, many2one_metric = model.evaluate(loader, need_metric=True)
         print(f"{'train:':6} Loss: {loss:.4f} {many2one_metric} {acc_metric}")
