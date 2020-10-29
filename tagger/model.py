@@ -29,10 +29,10 @@ class Model(object):
             device = "cuda"
         else:
             device = "cpu"
-        strans_numerator = [torch.full([self.tagger.n_tags], float("-inf")).to(device)]
-        etrans_numerator = [torch.full([self.tagger.n_tags], float("-inf")).to(device)]
-        emits_numerator = [torch.full([self.tagger.n_tags, self.tagger.n_words], float("-inf")).to(device)]
-        trans_numerator = [torch.full([self.tagger.n_tags, self.tagger.n_tags], float("-inf")).to(device)]
+        strans_numerator = torch.full([self.tagger.n_tags], float("-inf")).to(device)
+        etrans_numerator = torch.full([self.tagger.n_tags], float("-inf")).to(device)
+        emits_numerator = torch.full([self.tagger.n_tags, self.tagger.n_words], float("-inf")).to(device)
+        trans_numerator = torch.full([self.tagger.n_tags, self.tagger.n_tags], float("-inf")).to(device)
 
         for words, labels in loader:
             mask = words.ne(self.vocab.pad_index)
@@ -55,43 +55,31 @@ class Model(object):
             posteriors[~mask] = float('-inf')
 
             strans_posterior = torch.logsumexp(posteriors[indexes, 0], dim=0)
-            strans_numerator.append(strans_posterior)
+            strans_numerator = torch.logaddexp(strans_numerator, strans_posterior)
 
             etrans_posterior = torch.logsumexp(posteriors[indexes, lens-1], dim=0)
-            etrans_numerator.append(etrans_posterior)
+            etrans_numerator = torch.logaddexp(etrans_numerator, etrans_posterior)
 
             count = torch.arange(self.tagger.n_words).unsqueeze(0).unsqueeze(0).repeat(batch_size, max_len, 1).to(words.device) == words.unsqueeze(-1)
             count[~mask] = 0
             # exp may loss accuracy, use einsum to save memory
             count_posteriors = torch.log(torch.einsum("bxy, byz->bxz", torch.exp(posteriors.transpose(1,2)), count.float()))
-            emits_numerator.append(torch.logsumexp(count_posteriors, 0))
+            emits_numerator = torch.logaddexp(emits_numerator, torch.logsumexp(count_posteriors, 0))
 
-            # B*N*1 + B*1*N + B*N*N + B*1*N
+            # B*T-1*N*1 + B*T-1*1*N + 1*1*N*N + B*T-1*1*N
             if (lens > 1).any():
-                log_xi_sum = [alpha[:, l].unsqueeze(-1) + beta[:, l+1].unsqueeze(1) + self.tagger.trans.unsqueeze(0) + s_emit[:,l+1].unsqueeze(1) for l in range(max_len-1)]
-                log_xi_sum = torch.stack(log_xi_sum, 0)
-                log_xi_sum = torch.logsumexp(log_xi_sum, dim=0) - logZs.unsqueeze(-1).unsqueeze(-1)
-                trans_numerator.append(torch.logsumexp(log_xi_sum, 0))
-
-            strans_numerator = [torch.logsumexp(torch.stack(strans_numerator), 0)]
-            etrans_numerator = [torch.logsumexp(torch.stack(etrans_numerator), 0)]
-            emits_numerator = [torch.logsumexp(torch.stack(emits_numerator, 0), 0)]
-
-            if len(trans_numerator) > 1:
-                trans_numerator = [torch.logsumexp(torch.stack(trans_numerator, 0), 0)]
-
-        strans_numerator = strans_numerator[0]
+                log_xi_sum = alpha[:, 0: max_len-1].unsqueeze(-1) + beta[:, 1:max_len].unsqueeze(2) + self.tagger.trans.unsqueeze(0).unsqueeze(0) + s_emit[:,1:max_len].unsqueeze(2)
+                log_xi_sum = torch.logsumexp(log_xi_sum, dim=1) - logZs.unsqueeze(-1).unsqueeze(-1)
+                torch.logaddexp(trans_numerator, torch.logsumexp(log_xi_sum, 0))
+    
         strans_numerator_norm = strans_numerator - torch.logsumexp(strans_numerator, dim=-1)
-        etrans_numerator = etrans_numerator[0]
         etrans_numerator_norm = etrans_numerator - torch.logsumexp(etrans_numerator, dim=-1)
         self.tagger.strans.data = strans_numerator_norm
         self.tagger.etrans.data = etrans_numerator_norm
 
-        emits_numerator = emits_numerator[0]
         emits_numerator_norm = emits_numerator - torch.logsumexp(emits_numerator,dim=-1).unsqueeze(-1)
         self.tagger.emits.data = emits_numerator_norm
 
-        trans_numerator = trans_numerator[0]
         trans_numerator_sum = torch.logsumexp(trans_numerator, dim=-1)
         rows_to_keep_trans = ~torch.isfinite(trans_numerator_sum)
         trans_numerator_sum[rows_to_keep_trans] = 0
